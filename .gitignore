@@ -1,0 +1,32 @@
+# Dependencies and AdonisJS build
+node_modules
+build
+.adonisjs
+database/schema.ts
+tmp/*
+!tmp/.gitkeep
+
+# Secrets
+.env
+.env.local
+.env.production.local
+.env.development.local
+
+# Local session handoffs
+HANDOFF.md
+NEXT-SESSION-PROMPT.md
+
+# Frontend assets compiled code
+public/assets
+
+# Build tools specific
+npm-debug.log
+yarn-error.log
+
+# Editors specific
+.fleet
+.idea
+.vscode
+
+# Platform specific
+.DS_Store
