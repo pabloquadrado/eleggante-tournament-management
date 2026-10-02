@@ -1,0 +1,4 @@
+{
+  "include": ["app/**/*.ts", "start/routes.ts"],
+  "reporter": ["text", "lcov"]
+}

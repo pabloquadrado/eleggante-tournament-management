@@ -18,6 +18,7 @@ NEXT-SESSION-PROMPT.md
 
 # Frontend assets compiled code
 public/assets
+coverage
 
 # Build tools specific
 npm-debug.log

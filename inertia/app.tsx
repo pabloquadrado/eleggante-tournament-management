@@ -1,7 +1,5 @@
 import './css/app.css'
-import { client } from './client'
 import { createRoot } from 'react-dom/client'
-import { TuyauProvider } from '@adonisjs/inertia/react'
 import { resolvePageComponent } from '@adonisjs/inertia/helpers'
 import { createInertiaApp, type ResolvedComponent } from '@inertiajs/react'
 
@@ -17,11 +15,7 @@ createInertiaApp({
     return page.default
   },
   setup({ el, App, props }) {
-    createRoot(el).render(
-      <TuyauProvider client={client}>
-        <App {...props} />
-      </TuyauProvider>
-    )
+    createRoot(el).render(<App {...props} />)
   },
   progress: {
     color: '#4B5563',

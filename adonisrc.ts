@@ -1,7 +1,6 @@
 import { indexPages } from '@adonisjs/inertia'
 import { indexEntities } from '@adonisjs/core/generators'
 import { defineConfig } from '@adonisjs/core/app'
-import { generateRegistry } from '@tuyau/core/hooks'
 
 export default defineConfig({
   /*
@@ -59,7 +58,6 @@ export default defineConfig({
     () => import('@adonisjs/cors/cors_provider'),
     () => import('@adonisjs/inertia/inertia_provider'),
     () => import('@adonisjs/queue/queue_provider'),
-    () => import('#providers/api-provider'),
   ],
 
   /*
@@ -88,18 +86,18 @@ export default defineConfig({
   tests: {
     suites: [
       {
-        files: ['tests/unit/**/*.spec.{ts,js}'],
+        files: ['tests/unit/**/*.spec.{ts,js}', 'inertia/tests/**/*.spec.{ts,js}'],
         name: 'unit',
         timeout: 2000,
       },
       {
-        files: ['tests/functional/**/*.spec.{ts,js}'],
-        name: 'functional',
+        files: ['tests/integration/**/*.spec.{ts,js}'],
+        name: 'integration',
         timeout: 30000,
       },
       {
-        files: ['tests/browser/**/*.spec.{ts,js}'],
-        name: 'browser',
+        files: ['tests/functional/**/*.spec.{ts,js}'],
+        name: 'functional',
         timeout: 300000,
       },
     ],
@@ -132,7 +130,6 @@ export default defineConfig({
         transformers: { enabled: true, withSharedProps: true },
       }),
       indexPages({ framework: 'react' }),
-      generateRegistry(),
     ],
     buildStarting: [() => import('@adonisjs/vite/build_hook')],
   },
