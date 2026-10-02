@@ -1,7 +1,6 @@
 import { indexPages } from '@adonisjs/inertia'
 import { indexEntities } from '@adonisjs/core/generators'
 import { defineConfig } from '@adonisjs/core/app'
-import { generateRegistry } from '@tuyau/core/hooks'
 
 export default defineConfig({
   /*
@@ -131,7 +130,6 @@ export default defineConfig({
         transformers: { enabled: true, withSharedProps: true },
       }),
       indexPages({ framework: 'react' }),
-      generateRegistry(),
     ],
     buildStarting: [() => import('@adonisjs/vite/build_hook')],
   },

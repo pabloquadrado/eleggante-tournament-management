@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react'
-import { Link } from '@adonisjs/inertia/react'
+import { Link } from '@inertiajs/react'
 
 export default function ServerError() {
   return (

@@ -84,7 +84,6 @@
     "@adonisjs/vite": "^6.0.2",
     "@inertiajs/core": "^3.7.1",
     "@inertiajs/react": "^3.7.1",
-    "@tuyau/core": "^1.2.2",
     "@vinejs/vine": "^4.4.0",
     "edge.js": "^6.5.1",
     "lucide-react": "^1.48.0",

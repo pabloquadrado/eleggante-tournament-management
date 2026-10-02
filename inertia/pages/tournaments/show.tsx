@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react'
-import { Link } from '@adonisjs/inertia/react'
+import { Link } from '@inertiajs/react'
 import type { TournamentOverview } from '../../../app/modules/tournaments/domain/public-tournaments'
 import { formatTournamentDate, stateLabels } from '../../lib/tournament-presentation'
 

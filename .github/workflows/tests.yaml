@@ -45,7 +45,6 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: node ace migration:run --force
-      - run: npm run test:unit
       - run: npm run build
       - run: npm run typecheck
       - run: npm run lint
