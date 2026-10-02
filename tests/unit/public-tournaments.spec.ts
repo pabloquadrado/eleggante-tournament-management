@@ -1,27 +1,14 @@
-import test from 'node:test'
-import assert from 'node:assert/strict'
+import { test } from '@japa/runner'
 
 import {
   isListedPublicly,
   isVisibleAtDirectUrl,
   toPublicTournament,
-} from '../../app/modules/tournaments/domain/public-tournaments.ts'
+  tournamentStates,
+} from '../../app/modules/tournaments/domain/public-tournaments.js'
 
-const allStates = [
-  'draft',
-  'pending_approval',
-  'rejected',
-  'registration_open',
-  'registration_closed',
-  'in_progress',
-  'suspended',
-  'closed',
-  'canceled',
-  'archived',
-]
-
-test('a visitor sees only published tournaments in the default list', () => {
-  const listed = allStates.filter(isListedPublicly)
+test('a visitor sees only published tournaments in the default list', ({ assert }) => {
+  const listed = tournamentStates.filter(isListedPublicly)
 
   assert.deepEqual(listed, [
     'registration_open',
@@ -33,7 +20,9 @@ test('a visitor sees only published tournaments in the default list', () => {
   ])
 })
 
-test('an archived tournament is available by direct URL, while private states remain hidden', () => {
+test('an archived tournament is available by direct URL, while private states remain hidden', ({
+  assert,
+}) => {
   assert.equal(isVisibleAtDirectUrl('archived'), true)
   assert.equal(isListedPublicly('archived'), false)
   assert.equal(isVisibleAtDirectUrl('draft'), false)
@@ -41,14 +30,14 @@ test('an archived tournament is available by direct URL, while private states re
   assert.equal(isVisibleAtDirectUrl('rejected'), false)
 })
 
-test('public tournament data includes only approved overview fields', () => {
+test('public tournament data includes only approved overview fields', ({ assert }) => {
   const tournament = {
     id: '53f03ebc-23e0-4c86-a33c-816df42ceba0',
     title: 'Copa Eleggante',
     version: 2,
-    state: 'registration_open',
-    mode: 'in_person',
-    calendarMode: 'one_day',
+    state: 'registration_open' as const,
+    mode: 'in_person' as const,
+    calendarMode: 'one_day' as const,
     startsOn: '2026-10-10',
     endsOn: null,
     venueOrOnlineInstructions: 'Barbershop Eleggante',

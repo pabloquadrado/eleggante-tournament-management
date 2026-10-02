@@ -19,16 +19,16 @@ type TournamentRow = {
   ends_on: string | Date | null
   venue_or_online_instructions: string | null
   game_edition: string
-  created_at: string | Date
-  updated_at: string | Date
+  created_at: Date
+  updated_at: Date
 }
 
 function dateValue(value: string | Date | null): string | null {
   return value instanceof Date ? value.toISOString().slice(0, 10) : value
 }
 
-function timestampValue(value: string | Date): string {
-  return value instanceof Date ? value.toISOString() : value
+function timestampValue(value: Date): string {
+  return value.toISOString()
 }
 
 function project(row: TournamentRow): TournamentOverview {

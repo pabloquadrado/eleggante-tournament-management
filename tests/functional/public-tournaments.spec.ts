@@ -1,155 +1,100 @@
 import { test } from '@japa/runner'
 import db from '@adonisjs/lucid/services/db'
 import testUtils from '@adonisjs/core/services/test_utils'
+import { captureBrowserCoverage } from '../support/browser-coverage.js'
+import { eventId, givenCatalog, givenTournament } from '../support/public-tournament-fixtures.js'
 
-const organizationId = '5a1486b1-a0a2-44bd-9d95-72911016f544'
-const gameId = '8983adad-85bb-4259-8508-4b36039779b0'
-const editionId = '65a5b58d-91b6-4a46-bd2a-c99eb1520eb0'
-const eventId = '0087fc67-2ca2-4efe-8923-dbb1ab6634be'
-const now = '2026-09-30T12:00:00.000Z'
-
-async function givenCatalog() {
-  await db.table('organizations').insert({
-    id: organizationId,
-    name: 'Barbershop Eleggante',
-    slug: 'barbershop-eleggante',
-    created_at: now,
-    updated_at: now,
-  })
-  await db.table('games').insert({
-    id: gameId,
-    code: 'ea-fc',
-    name: 'EA FC',
-    created_at: now,
-    updated_at: now,
-  })
-  await db.table('game_editions').insert({
-    id: editionId,
-    game_id: gameId,
-    code: 'ea-fc-26',
-    name: 'EA FC 26',
-    release_year: 2025,
-    selectable: true,
-    created_at: now,
-    updated_at: now,
-  })
-}
-
-async function givenTournament(state: string, id = eventId) {
-  await db.table('tournaments').insert({
-    id,
-    organization_id: organizationId,
-    game_edition_id: editionId,
-    title: 'Copa Eleggante',
-    state,
-    version: 1,
-    mode: 'in_person',
-    calendar_mode: 'one_day',
-    starts_on: '2026-10-10',
-    ends_on: null,
-    venue_or_online_instructions: 'Barbershop Eleggante',
-    created_at: now,
-    updated_at: now,
-  })
-}
-
-test.group('Public tournaments', (group) => {
+test.group('Visitor tournament pages', (group) => {
   group.each.setup(() => testUtils.db().truncate())
 
-  test('empty listing has no tournaments in the API and visitor page', async ({ client }) => {
-    const api = await client.get('/api/v1/tournaments')
-    api.assertStatus(200)
-    api.assertBody({ data: [] })
-
-    const page = await client.get('/tournaments').withInertia()
-    page.assertStatus(200)
-    page.assertInertiaComponent('tournaments/index')
-    page.assertInertiaPropsContains({ tournaments: [] })
+  test('a visitor sees a helpful empty state', async ({ visit }) => {
+    const page = await visit('/tournaments')
+    await page.getByRole('heading', { name: 'Nenhum torneio disponível no momento' }).waitFor()
+    await captureBrowserCoverage(page, 'empty-list')
   })
 
-  test('a visitor can find and open a public tournament without private data', async ({
-    client,
-    assert,
-  }) => {
+  test('a visitor opens a listed tournament and returns to the list', async ({ visit }) => {
     await givenCatalog()
     await givenTournament('registration_open')
 
-    const listing = await client.get('/api/v1/tournaments')
-    listing.assertStatus(200)
-    const [overview] = listing.body().data
-    assert.deepEqual(
-      Object.keys(overview).sort(),
-      [
-        'calendarMode',
-        'createdAt',
-        'endsOn',
-        'gameEdition',
-        'id',
-        'mode',
-        'startsOn',
-        'state',
-        'title',
-        'updatedAt',
-        'venueOrOnlineInstructions',
-        'version',
-      ].sort()
-    )
-    assert.equal(overview.title, 'Copa Eleggante')
-    assert.equal(overview.gameEdition, 'EA FC 26')
+    const page = await visit('/tournaments')
+    await page.getByRole('heading', { name: 'Copa Eleggante' }).waitFor()
+    await page.getByText('Inscrições abertas').waitFor()
+    await captureBrowserCoverage(page, 'listed-tournament')
 
-    const detail = await client.get(`/api/v1/tournaments/${eventId}`)
-    detail.assertStatus(200)
-    detail.assertBody({ data: overview })
+    await page.getByRole('link', { name: /Ver torneio/ }).click()
+    await page.getByRole('heading', { name: 'Copa Eleggante' }).waitFor()
+    await page.getByText('Barbershop Eleggante').last().waitFor()
+    await captureBrowserCoverage(page, 'tournament-detail')
 
-    const page = await client.get(`/tournaments/${eventId}`).withInertia()
-    page.assertStatus(200)
-    page.assertInertiaComponent('tournaments/show')
-    page.assertInertiaPropsContains({ tournament: overview })
+    await page.getByRole('link', { name: /Todos os torneios/ }).click()
+    await page.getByRole('heading', { name: 'Torneios', exact: true }).waitFor()
   })
 
-  test('private and unknown tournaments are indistinguishable to visitors', async ({ client }) => {
-    await givenCatalog()
-    await givenTournament('draft')
-
-    const listing = await client.get('/api/v1/tournaments')
-    listing.assertBody({ data: [] })
-
-    const privateDetail = await client.get(`/api/v1/tournaments/${eventId}`)
-    const unknownDetail = await client.get(
-      '/api/v1/tournaments/639c8c2b-4d3b-49fc-b8ed-764a3e2445dd'
-    )
-    privateDetail.assertStatus(404)
-    unknownDetail.assertStatus(404)
-    privateDetail.assertBody(unknownDetail.body())
-
-    const privatePage = await client.get(`/tournaments/${eventId}`).withInertia()
-    privatePage.assertStatus(404)
-    privatePage.assertInertiaComponent('errors/not-found')
-
-    const unknownPage = await client
-      .get('/tournaments/639c8c2b-4d3b-49fc-b8ed-764a3e2445dd')
-      .withInertia()
-    unknownPage.assertStatus(404)
-    unknownPage.assertInertiaComponent('errors/not-found')
-
-    const invalidId = await client.get('/api/v1/tournaments/invalid-id')
-    invalidId.assertStatus(404)
-    invalidId.assertBody(unknownDetail.body())
-  })
-
-  test('an archived tournament is accessible only through its direct URL', async ({ client }) => {
+  test('a visitor can open an archived tournament directly but cannot find it in the list', async ({
+    visit,
+  }) => {
     await givenCatalog()
     await givenTournament('archived')
 
-    const listing = await client.get('/api/v1/tournaments')
-    listing.assertBody({ data: [] })
+    const list = await visit('/tournaments')
+    await list.getByRole('heading', { name: 'Nenhum torneio disponível no momento' }).waitFor()
+    await captureBrowserCoverage(list, 'archived-list')
 
-    const detail = await client.get(`/api/v1/tournaments/${eventId}`)
-    detail.assertStatus(200)
-    detail.assertBodyContains({ data: { state: 'archived' } })
+    const detail = await visit(`/tournaments/${eventId}`)
+    await detail.getByText('Arquivado').waitFor()
+    await captureBrowserCoverage(detail, 'archived-detail')
+  })
 
-    const page = await client.get(`/tournaments/${eventId}`).withInertia()
-    page.assertStatus(200)
-    page.assertInertiaComponent('tournaments/show')
+  test('a private tournament shows the same not-found page as an unknown address', async ({
+    visit,
+  }) => {
+    await givenCatalog()
+    await givenTournament('draft')
+
+    const page = await visit(`/tournaments/${eventId}`)
+    await page.getByRole('heading', { name: 'Página não encontrada' }).waitFor()
+    await captureBrowserCoverage(page, 'private-tournament')
+
+    await page.getByRole('link', { name: 'Ver torneios' }).click()
+    await page.getByRole('heading', { name: 'Nenhum torneio disponível no momento' }).waitFor()
+  })
+
+  test('an online tournament shows joining instructions and both dates', async ({ visit }) => {
+    await givenCatalog()
+    await givenTournament('in_progress')
+    await db.from('tournaments').where('id', eventId).update({
+      mode: 'online',
+      calendar_mode: 'multi_day',
+      ends_on: '2026-10-11',
+      venue_or_online_instructions: 'Sala privada',
+    })
+
+    const list = await visit('/tournaments')
+    await list.getByText('Online').waitFor()
+    await captureBrowserCoverage(list, 'online-list')
+
+    const detail = await visit(`/tournaments/${eventId}`)
+    await detail.getByText('Como participar').waitFor()
+    await detail.getByText('Sala privada').waitFor()
+    await detail.getByText('11/10/2026').waitFor()
+    await captureBrowserCoverage(detail, 'online-detail')
+  })
+
+  test('an undated tournament shows a date fallback', async ({ visit }) => {
+    await givenCatalog()
+    await givenTournament('registration_open')
+    await db.from('tournaments').where('id', eventId).update({ starts_on: null })
+
+    const page = await visit('/tournaments')
+    await page.getByText('Data a definir').waitFor()
+    await captureBrowserCoverage(page, 'undated-tournament')
+  })
+
+  test('a server error page offers a way back to tournaments', async ({ visit }) => {
+    const page = await visit('/__test__/server-error')
+    await page.getByRole('heading', { name: 'Ocorreu um erro' }).waitFor()
+    await page.getByRole('link', { name: 'Ver torneios' }).waitFor()
+    await captureBrowserCoverage(page, 'server-error')
   })
 })

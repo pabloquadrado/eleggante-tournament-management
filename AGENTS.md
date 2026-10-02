@@ -19,3 +19,7 @@ Write repository instructions, domain docs, ADRs, issues, specifications, plans,
 ### Refinement gate
 
 Before turning a story into implementation tasks, compare it with the approved PRD and relevant specification sections. Recheck acceptance examples, data and state impacts, authorization, public visibility, and tests; record any changed or unresolved decision in the issue. A proposed specification section is not approved merely because it is written.
+
+### Tests and coverage
+
+Use Japa for unit tests of domain and presentation rules, integration tests that exercise the API over HTTP with PostgreSQL, and functional tests that drive the frontend in Chromium. Measure application source in both the Node process and the browser. Exclude framework configuration, generated code, disabled entrypoints, and type-only files; document each exclusion. The full coverage gate must pass at 100% statements, branches, functions, and lines per application file before implementation reaches `main`. Require the coverage CI check in the `main` branch protection rule so a pull request cannot merge when the gate fails. A passing percentage also needs meaningful behavior and authorization assertions.

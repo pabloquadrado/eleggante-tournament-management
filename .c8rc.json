@@ -1,0 +1,4 @@
+{
+  "include": ["app/**/*.ts"],
+  "reporter": ["text", "lcov"]
+}
