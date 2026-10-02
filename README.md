@@ -21,6 +21,7 @@ Open [the tournament list](http://localhost:3333/tournaments). The local seed ad
 ```bash
 docker compose --profile test build tests
 docker compose --profile test run --rm tests node ace migration:fresh --force
+docker compose --profile test run --rm tests npm run test:unit
 docker compose --profile test run --rm tests npm run build
 docker compose --profile test run --rm tests npm run test:coverage
 docker compose --profile test run --rm tests npm run typecheck
