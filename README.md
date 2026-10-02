@@ -21,10 +21,10 @@ Open [the tournament list](http://localhost:3333/tournaments). The local seed ad
 ```bash
 docker compose --profile test build tests
 docker compose --profile test run --rm tests node ace migration:fresh --force
+docker compose --profile test run --rm tests npm run build
 docker compose --profile test run --rm tests npm run test:coverage
 docker compose --profile test run --rm tests npm run typecheck
 docker compose --profile test run --rm tests npm run lint
-docker compose --profile test run --rm tests npm run build
 ```
 
 The full Japa suite uses the `arena_test` PostgreSQL database. To run only the Japa unit suite:
