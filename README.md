@@ -8,7 +8,7 @@
 
 Arena Eleggante is a web system designed as a hosted SaaS, with public tournament pages and a planned administrative area. V1 is for Barbershop Eleggante's internal tournament operation. Visitors will use the website; they will not install or self-host it.
 
-The V1 target covers EA FC tournaments, in person and online. It does not include payments, game or console synchronization, a native app, or self-service for other organizations. The [PRD](product-requirements-document.md) defines product behavior; [issue #1](https://github.com/pabloquadrado/eleggante-tournament-management/issues/1) records the approved technical spec. Neither is a list of features already implemented.
+The V1 target covers EA FC tournaments, in person and online. It does not include payments, game or console synchronization, a native app, or self-service for other organizations. The approved PRD is maintained in the private team vault; [issue #1](https://github.com/pabloquadrado/eleggante-tournament-management/issues/1) records the approved technical spec. Neither is a list of features already implemented.
 
 ## Features
 

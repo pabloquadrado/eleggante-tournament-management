@@ -32,6 +32,10 @@ id_ed25519
 HANDOFF.md
 NEXT-SESSION-PROMPT.md
 
+# Private product and commercial documents
+/product-requirements-document.md
+/hosting-budget.md
+
 # Frontend assets compiled code
 public/assets
 coverage
