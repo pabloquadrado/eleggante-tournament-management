@@ -3,7 +3,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: arena
-      POSTGRES_PASSWORD: arena_local
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       POSTGRES_DB: arena_dev
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -24,11 +24,12 @@ services:
     command: ['sh', '-c', 'node ace migration:run --force && node ace serve --hmr']
     environment:
       HOST: 0.0.0.0
+      APP_NAME: ${APP_NAME:-Arena Eleggante}
       APP_URL: http://localhost:3333
       DB_HOST: database
       DB_PORT: 5432
       DB_USER: arena
-      DB_PASSWORD: arena_local
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       DB_DATABASE: arena_dev
       QUEUE_DRIVER: database
     ports:
@@ -58,10 +59,11 @@ services:
     build: .
     command: ['node', 'ace', 'queue:work']
     environment:
+      APP_NAME: ${APP_NAME:-Arena Eleggante}
       DB_HOST: database
       DB_PORT: 5432
       DB_USER: arena
-      DB_PASSWORD: arena_local
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       DB_DATABASE: arena_dev
       QUEUE_DRIVER: database
     volumes:
@@ -81,10 +83,11 @@ services:
     environment:
       NODE_ENV: test
       HOST: 0.0.0.0
+      APP_NAME: ${APP_NAME:-Arena Eleggante}
       DB_HOST: database
       DB_PORT: 5432
       DB_USER: arena
-      DB_PASSWORD: arena_local
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       DB_DATABASE: arena_test
       QUEUE_DRIVER: sync
     volumes:

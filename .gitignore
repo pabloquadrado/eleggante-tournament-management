@@ -8,13 +8,33 @@ tmp/*
 
 # Secrets
 .env
-.env.local
-.env.production.local
-.env.development.local
+.env.*
+!.env.example
+!.env.*.example
+.envrc
+.direnv/
+.npmrc
+.pypirc
+.aws/
+.ssh/
+.secrets/
+secrets/
+*.secret
+*.secrets.json
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
 
 # Local session handoffs
 HANDOFF.md
 NEXT-SESSION-PROMPT.md
+
+# Private product and commercial documents
+/product-requirements-document.md
+/hosting-budget.md
 
 # Frontend assets compiled code
 public/assets
