@@ -20,6 +20,10 @@ Write repository instructions, domain docs, ADRs, issues, specifications, plans,
 
 Before turning a story into implementation tasks, compare it with the approved PRD in the private team vault and relevant specification sections. Request access to the PRD from the Owner if needed. Recheck acceptance examples, data and state impacts, authorization, public visibility, and tests; record any changed or unresolved decision in the issue. A proposed specification section is not approved merely because it is written.
 
+### Pull requests
+
+Leave every completed pull request ready for the Owner to review. If a pull request starts as a draft, mark it ready after the work and required checks are complete. The Owner alone merges pull requests; agents must never merge them.
+
 ### Tests and coverage
 
 Use Japa for unit tests of domain and presentation rules, integration tests that exercise the API over HTTP with PostgreSQL, and functional tests that drive the frontend in Chromium. Measure application source in both the Node process and the browser. Exclude framework configuration, generated code, disabled entrypoints, and type-only files; document each exclusion. The full coverage gate must pass at 100% statements, branches, functions, and lines per application file before implementation reaches `main`. Require the coverage CI check in the `main` branch protection rule so a pull request cannot merge when the gate fails. A passing percentage also needs meaningful behavior and authorization assertions.

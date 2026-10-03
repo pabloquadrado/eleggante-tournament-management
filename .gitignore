@@ -25,16 +25,6 @@ secrets/
 *.key
 *.p12
 *.pfx
-id_rsa
-id_ed25519
-
-# Local session handoffs
-HANDOFF.md
-NEXT-SESSION-PROMPT.md
-
-# Private product and commercial documents
-/product-requirements-document.md
-/hosting-budget.md
 
 # Frontend assets compiled code
 public/assets
