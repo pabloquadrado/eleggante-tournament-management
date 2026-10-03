@@ -13,7 +13,7 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: arena
-          POSTGRES_PASSWORD: arena_local
+          POSTGRES_PASSWORD: ci-only-test-password
           POSTGRES_DB: arena_test
         ports:
           - 5432:5432
@@ -27,17 +27,23 @@ jobs:
       HOST: 127.0.0.1
       PORT: 3333
       LOG_LEVEL: info
-      APP_KEY: base64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      APP_NAME: Arena Eleggante
       APP_URL: http://127.0.0.1:3333
       SESSION_DRIVER: memory
       DB_HOST: 127.0.0.1
       DB_PORT: 5432
       DB_USER: arena
-      DB_PASSWORD: arena_local
+      DB_PASSWORD: ci-only-test-password
       DB_DATABASE: arena_test
       QUEUE_DRIVER: sync
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan Git history for secrets
+        run: docker run --rm --volume "$PWD:/repo:ro" --workdir /repo ghcr.io/gitleaks/gitleaks:v8.30.1 git --log-opts=--all --redact=100 --no-banner .
+      - name: Generate ephemeral test app key
+        run: echo "APP_KEY=base64:$(openssl rand -base64 32)" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version: 24
