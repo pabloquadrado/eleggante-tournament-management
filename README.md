@@ -17,10 +17,12 @@ The V1 target covers EA FC tournaments, in person and online. It does not includ
 - **Public catalog:** Visitors browse published tournaments without signing in. Archived tournaments stay available by direct URL.
 - **Tournament overview:** List and detail pages show state, game edition, mode, date, and venue or online instructions when present.
 - **Read-only API:** `GET /api/v1/tournaments` and `GET /api/v1/tournaments/:id` return public overview data.
+- **Email sign-in:** Players request a single-use email code, verify it, and complete their own profile. Phone changes require a fresh code sent to the verified email. Sessions and abuse controls are stored in PostgreSQL.
+- **Limited onboarding:** Profile completion is available after email verification. Access remains limited until versioned consent is implemented in #5.
 
 **Planned for internal V1:**
 
-- **Identity and access:** Email-code or Google sign-in, player profiles, versioned consent, and Platform Admin, Owner, Organizer, Player, and Visitor permissions.
+- **Identity and access:** Google sign-in, versioned consent, and Platform Admin, Owner, Organizer, Player, and Visitor permissions. The controlled first Platform Admin bootstrap belongs to #6.
 - **Tournament operation:** Creation, approval, registration, waiting list, scheduling, suspension, closure, and archival.
 - **Competition:** Team or national-team selection and draws, groups, knockout brackets, match results, standings, disputes, and audit history.
 - **Public competition view:** Approved participants, published results, standings, brackets, and an unlisted read-only live draw link.
@@ -38,8 +40,8 @@ The V1 target covers EA FC tournaments, in person and online. It does not includ
 | Application     | Node.js 24, TypeScript, AdonisJS 7, Inertia/React, Vite                                                                       | One web application with public and administrative areas                       |
 | Data            | PostgreSQL 16 with Lucid migrations                                                                                           | Transactional source of truth for tournament state and history                 |
 | Code boundaries | Public-tournament domain and PostgreSQL adapter under `app/modules/tournaments`; HTTP controller and React pages at the edges | Domain and application rules independent of framework and persistence adapters |
-| Background work | Database-backed queue worker starts; no email jobs are implemented                                                            | Transactional outbox and operational email delivery                            |
-| Local tooling   | Docker Compose, PostgreSQL, Mailpit                                                                                           | Mailpit is a local mail sink; application email transport is not wired yet     |
+| Background work | Database-backed worker recovers and delivers committed OTP emails                                                            | Transactional outbox and operational email delivery                            |
+| Local tooling   | Docker Compose, PostgreSQL, Mailpit                                                                                           | SMTP delivers operational sign-in and phone-change codes to local Mailpit     |
 | Tests           | Japa unit, HTTP/PostgreSQL integration, and Chromium functional suites; c8 and browser instrumentation enforce coverage       | Extend behavior and security tests as each V1 workflow is built                |
 | Production      | No production deployment is documented in this repository                                                                     | Coolify-managed containers and observability, subject to deployment checks     |
 
@@ -58,13 +60,13 @@ docker compose up -d app worker
 docker compose exec app node ace db:seed
 ```
 
-The app runs at `http://localhost:3333/tournaments`. The optional development seed adds two listed tournaments and one archived tournament. Mailpit's local inbox is at `http://localhost:8025`; no application mail flow uses it yet.
+The app runs at `http://localhost:3333/tournaments`. The optional development seed adds two listed tournaments and one archived tournament. Email sign-in starts at `http://localhost:3333/sign-in`. Mailpit's local inbox is at `http://localhost:8025`; sign-in and phone-change codes appear there.
 
 **Checks:** The test service uses `arena_test`, separate from the development database.
 
 ```bash
 docker compose --profile test build tests
-docker compose --profile test run --rm tests node ace migration:fresh --force
+docker compose --profile test run --rm tests node ace migration:fresh --drop-types --force
 docker compose --profile test run --rm tests npm run build
 docker compose --profile test run --rm tests npm run typecheck
 docker compose --profile test run --rm tests npm run lint
@@ -86,12 +88,12 @@ Copy [`.env.example`](.env.example) for local development. `start/env.ts` valida
 | `APP_NAME`                                                    | Name used in application logs; the example uses `Arena Eleggante`                             |
 | `APP_KEY`                                                     | Generate locally with `node ace generate:key`; do not commit the value                        |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_DATABASE` | PostgreSQL connection; Compose uses `database:5432` and `arena_dev`                           |
-| `SESSION_DRIVER`                                              | `cookie` locally; `memory` in CI                                                              |
+| `SESSION_DRIVER`                                              | `database` in development, tests, and CI; two-hour inactivity lifetime                                                              |
 | `QUEUE_DRIVER`                                                | `database` locally; `sync` in CI                                                              |
 | `LOG_LEVEL`                                                   | Application log level; the example uses `info`                                                |
 | `TZ`                                                          | Container time zone setting; the example uses `UTC`. V1 displays dates in `America/Sao_Paulo` |
 
-Replace the `DB_PASSWORD` placeholder in `.env` before starting Compose. The app key command fills `APP_KEY`. Compose starts PostgreSQL 16 and a Mailpit container. The local database is stored in a named Docker volume. Production secrets, mail provider settings, and hosting configuration are not documented or finalized here.
+Replace the `DB_PASSWORD` placeholder in `.env` before starting Compose. The app key command fills `APP_KEY`. Compose starts PostgreSQL 16 and a Mailpit container. The local database is stored in a named Docker volume. Production secrets, the production mail provider, and hosting configuration are not finalized here. SMTP settings and worker recovery are documented in [Identity operations](docs/identity-operations.md).
 
 ## Screenshots
 

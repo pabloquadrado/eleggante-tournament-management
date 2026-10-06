@@ -1,6 +1,6 @@
-import env from '#start/env'
 import app from '@adonisjs/core/services/app'
 import { defineConfig, stores } from '@adonisjs/session'
+import { sessionPolicy } from '../app/modules/identity/domain/session-policy.js'
 
 const sessionConfig = defineConfig({
   /**
@@ -23,7 +23,7 @@ const sessionConfig = defineConfig({
    * Define how long to keep the session data alive without
    * any activity.
    */
-  age: '2h',
+  age: sessionPolicy.inactivitySeconds,
 
   /**
    * Configuration for session cookie and the
@@ -56,7 +56,7 @@ const sessionConfig = defineConfig({
    * variable in order to infer the store name without any
    * errors.
    */
-  store: env.get('SESSION_DRIVER'),
+  store: 'database',
 
   /**
    * List of configured stores. Refer documentation to see

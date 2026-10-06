@@ -29,7 +29,7 @@ jobs:
       LOG_LEVEL: info
       APP_NAME: Arena Eleggante
       APP_URL: http://127.0.0.1:3333
-      SESSION_DRIVER: memory
+      SESSION_DRIVER: database
       DB_HOST: 127.0.0.1
       DB_PORT: 5432
       DB_USER: arena

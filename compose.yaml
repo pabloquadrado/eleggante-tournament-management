@@ -32,6 +32,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       DB_DATABASE: arena_dev
       QUEUE_DRIVER: database
+      SESSION_DRIVER: database
     ports:
       - '127.0.0.1:3333:3333'
       - '127.0.0.1:5173:5173'
@@ -57,7 +58,7 @@ services:
 
   worker:
     build: .
-    command: ['node', 'ace', 'queue:work']
+    command: ['sh', '-c', 'node ace outbox:schedule && node ace queue:work']
     environment:
       APP_NAME: ${APP_NAME:-Arena Eleggante}
       DB_HOST: database
@@ -66,6 +67,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       DB_DATABASE: arena_dev
       QUEUE_DRIVER: database
+      SESSION_DRIVER: database
     volumes:
       - .:/app
       - node_modules:/app/node_modules
@@ -82,7 +84,7 @@ services:
       ['sh', '-c', 'node ace migration:run --force && npm run build && npm run test:coverage']
     environment:
       NODE_ENV: test
-      HOST: 0.0.0.0
+      HOST: 127.0.0.1
       APP_NAME: ${APP_NAME:-Arena Eleggante}
       DB_HOST: database
       DB_PORT: 5432
@@ -90,6 +92,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       DB_DATABASE: arena_test
       QUEUE_DRIVER: sync
+      SESSION_DRIVER: database
     volumes:
       - .:/app
       - node_modules:/app/node_modules

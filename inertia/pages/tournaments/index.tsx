@@ -12,6 +12,9 @@ export default function TournamentIndex({ tournaments }: { tournaments: Tourname
           Arena Eleggante
         </a>
       </header>
+      <Link href="/sign-in" className="arena-link">
+        Entrar
+      </Link>
       <section className="arena-intro">
         <p className="arena-eyebrow">Arena Eleggante</p>
         <h1>Torneios</h1>
