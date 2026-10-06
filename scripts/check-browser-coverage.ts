@@ -7,9 +7,9 @@ const { createCoverageMap } = coverageLibrary
 const rawDirectory = 'coverage/browser/raw'
 const includedDirectory = 'inertia'
 const excludedFiles = new Set(['inertia/ssr.tsx', 'inertia/types.ts'])
-const metrics = ['lines', 'statements', 'branches', 'functions']
+const metrics = ['lines', 'statements', 'branches', 'functions'] as const
 
-async function sourceFiles(directory) {
+async function sourceFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true })
   const nested = await Promise.all(
     entries.map(async (entry) => {
@@ -24,7 +24,8 @@ async function sourceFiles(directory) {
 }
 
 const coverage = createCoverageMap({})
-const rawFiles = (await readdir(rawDirectory)).filter((file) => file.endsWith('.json'))
+const entries = await readdir(rawDirectory)
+const rawFiles = entries.filter((file) => file.endsWith('.json'))
 if (rawFiles.length === 0) throw new Error('No browser coverage was collected')
 
 for (const file of rawFiles) {

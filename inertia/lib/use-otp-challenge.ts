@@ -1,5 +1,5 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
-import { identityRequest } from './identity-http'
+import { identityRequest } from './identity-http.ts'
 
 export type OtpChallenge = {
   challengeId: string

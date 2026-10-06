@@ -1,4 +1,4 @@
-import type { IdentityAccess } from './session-policy.js'
+import type { IdentityAccess } from './session-policy.ts'
 
 type ProfileCompleteness = {
   name: string | null

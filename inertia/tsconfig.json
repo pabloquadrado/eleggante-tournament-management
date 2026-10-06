@@ -2,6 +2,7 @@
   "extends": "@adonisjs/tsconfig/tsconfig.client.json",
   "compilerOptions": {
     "module": "ESNext",
+    "rewriteRelativeImportExtensions": true,
     "jsx": "react-jsx",
     "paths": {
       "~/*": ["./*"],

@@ -6,15 +6,18 @@ import { configProvider } from '@adonisjs/core'
 import app from '@adonisjs/core/services/app'
 import sessionConfig from '#config/session'
 import type { ResolvedSessionConfig } from '@adonisjs/session/types'
-import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
-import { sessionPolicy, type IdentityAccess } from '../domain/session-policy.js'
+import { IdentitySession } from '../../application/ports/identity-adapters.ts'
+import type { IdentitySessionRepository } from '../../application/ports/identity-repositories.ts'
+import { sessionPolicy, type IdentityAccess } from '../../domain/session-policy.ts'
 
-export class PostgresIdentitySession {
+export class AdonisIdentitySession extends IdentitySession {
   private pendingSession!: Session
 
-  constructor(private context: HttpContext) {}
+  constructor(private context: HttpContext) {
+    super()
+  }
 
-  async establish(userId: string, access: IdentityAccess, transaction: TransactionClientContract) {
+  async establish(userId: string, access: IdentityAccess, repository: IdentitySessionRepository) {
     const { auth } = this.context
     const original = this.context.session
     const config = (await configProvider.resolve<ResolvedSessionConfig>(app, sessionConfig))!
@@ -29,13 +32,13 @@ export class PostgresIdentitySession {
     // Guard.login would tag via a separate connection before the new user commits.
     session.put(auth.use('web').sessionKeyName, userId)
     session.put('identityAccess', access)
-    await transaction.table('sessions').insert({
+    await repository.replace({
       id: session.sessionId,
-      user_id: userId,
+      userId,
+      oldId,
       data: new MessageBuilder().build(session.all(), undefined, session.sessionId),
-      expires_at: new Date(Date.now() + sessionPolicy.inactivitySeconds * 1000),
+      expiresAt: new Date(Date.now() + sessionPolicy.inactivitySeconds * 1000),
     })
-    await transaction.from('sessions').where('id', oldId).delete()
     this.pendingSession = session
   }
 

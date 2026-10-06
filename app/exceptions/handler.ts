@@ -1,7 +1,7 @@
 import app from '@adonisjs/core/services/app'
 import { type HttpContext, ExceptionHandler } from '@adonisjs/core/http'
 import type { StatusPageRange, StatusPageRenderer } from '@adonisjs/core/types/http'
-import { IdentityError } from '../modules/identity/domain/identity-error.js'
+import { IdentityError } from '../modules/identity/domain/identity-error.ts'
 import { errors as shieldErrors } from '@adonisjs/shield'
 
 export default class HttpExceptionHandler extends ExceptionHandler {

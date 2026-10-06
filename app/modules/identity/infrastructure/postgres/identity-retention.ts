@@ -1,12 +1,17 @@
 import db from '@adonisjs/lucid/services/db'
-import { otpPolicy } from '../domain/otp-policy.js'
-import { lockIdentityWrites } from './identity-write-lock.js'
+import { IdentityRetentionRepository } from '../../application/ports/identity-repositories.ts'
+import { lockIdentityWrites } from './identity-write-lock.ts'
 
-const replayRetentionMilliseconds = 24 * 60 * 60 * 1000
-
-export class PostgresIdentityRetention {
-  async sweep() {
-    const now = new Date()
+export class PostgresIdentityRetention extends IdentityRetentionRepository {
+  async clean({
+    now,
+    requestCutoff,
+    replayCutoff,
+  }: {
+    now: Date
+    requestCutoff: Date
+    replayCutoff: Date
+  }) {
     await db.transaction(async (transaction) => {
       await lockIdentityWrites(transaction)
       const terminal = transaction
@@ -30,11 +35,7 @@ export class PostgresIdentityRetention {
         .whereIn('challenge_id', terminal.clone())
         .where('delivery_state', 'pending')
         .update({ delivery_state: 'failed', payload_encrypted: null, updated_at: now })
-      await transaction
-        .from('otp_request_events')
-        .where('created_at', '<=', new Date(now.getTime() - otpPolicy.windowSeconds * 1000))
-        .delete()
-      const replayCutoff = new Date(now.getTime() - replayRetentionMilliseconds)
+      await transaction.from('otp_request_events').where('created_at', '<=', requestCutoff).delete()
       await transaction.from('profile_commands').where('created_at', '<=', replayCutoff).delete()
       const old = transaction
         .from('otp_challenges')

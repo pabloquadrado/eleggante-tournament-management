@@ -1,12 +1,12 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import mail from '@adonisjs/mail/services/main'
-import DispatchOtpOutboxJob from '../../app/jobs/dispatch-otp-outbox-job.js'
-import { captureBrowserCoverage } from '../support/browser-coverage.js'
+import DispatchOtpOutboxJob from '../../app/jobs/dispatch-otp-outbox-job.ts'
+import { captureBrowserCoverage } from '../support/browser-coverage.ts'
 import type { FakeMailer } from '@adonisjs/mail'
 import db from '@adonisjs/lucid/services/db'
 import app from '@adonisjs/core/services/app'
-import { ConsentPolicy } from '../../app/modules/identity/application/consent-policy.js'
+import { ConsentPolicy } from '../../app/modules/identity/application/consent-policy.ts'
 import type { Page, Route } from 'playwright'
 
 test.group('Player email sign-in', (group) => {
@@ -52,7 +52,33 @@ test.group('Player email sign-in', (group) => {
     await page.getByText('Informe um nome entre 2 e 100 caracteres.').waitFor()
     await page.getByLabel('Nome de exibição').fill('Pablo')
     await page.getByLabel('Nome de usuário').fill('pablo.fc')
-    await page.getByLabel('Celular com DDD').fill('+5551999009633')
+    const phone = page.getByLabel('Celular com DDD')
+    assert.equal(await phone.inputValue(), '')
+    assert.equal(await phone.getAttribute('placeholder'), '+55 (00) 00000-0000')
+    await phone.pressSequentially('51abc99900963312345')
+    assert.equal(await phone.inputValue(), '+55 (51) 99900-9633')
+    await phone.press('Backspace')
+    assert.equal(await phone.inputValue(), '+55 (51) 99900-963')
+    await phone.press('3')
+    assert.equal(await phone.inputValue(), '+55 (51) 99900-9633')
+    for (const [input, expected] of [
+      ['', ''],
+      ['abc+', ''],
+      ['5', '+55 (5'],
+      ['51', '+55 (51'],
+      ['519', '+55 (51) 9'],
+      ['5199900', '+55 (51) 99900'],
+      ['51999009', '+55 (51) 99900-9'],
+      ['51999009633', '+55 (51) 99900-9633'],
+      ['(55) 99900-9633', '+55 (55) 99900-9633'],
+      ['5551999009633', '+55 (51) 99900-9633'],
+      ['  +55 (51) 99900-9633', '+55 (51) 99900-9633'],
+      ['++55a51b99900-9633', '+55 (51) 99900-9633'],
+      ['+555199900963312345', '+55 (51) 99900-9633'],
+    ]) {
+      await phone.fill(input)
+      assert.equal(await phone.inputValue(), expected)
+    }
     await page.getByRole('button', { name: 'Salvar perfil' }).click()
     await page.getByText('Perfil salvo.').waitFor()
     await page.getByText('Aceite dos documentos pendente').waitFor()
@@ -176,6 +202,7 @@ test.group('Player email sign-in', (group) => {
     await verifyEmail(page)
     await page.getByRole('heading', { name: 'Meu perfil', exact: true }).waitFor()
     assert.equal(await page.getByLabel('Nome de exibição').inputValue(), 'Private Player')
+    assert.equal(await page.getByLabel('Celular com DDD').inputValue(), '+55 (51) 99900-9633')
     assert.equal(await page.getByText('Aceite dos documentos pendente').count(), 0)
     await page.getByLabel('Nome de exibição').fill('Updated Player')
     await page.getByRole('button', { name: 'Salvar perfil' }).click()

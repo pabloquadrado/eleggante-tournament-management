@@ -15,10 +15,11 @@
     "test:unit": "node ace test unit",
     "test:integration": "node ace test integration",
     "test:functional": "node ace test functional",
-    "test:coverage": "node scripts/clear-browser-coverage.mjs && VITE_COVERAGE=true vite build && VITE_COVERAGE=true c8 --all --per-file --100 node ace test && node scripts/check-browser-coverage.mjs",
-    "lint": "eslint .",
+    "test:coverage": "node --import=@poppinss/ts-exec scripts/clear-browser-coverage.ts && VITE_COVERAGE=true vite build && VITE_COVERAGE=true c8 --all --per-file --100 node ace test && node --import=@poppinss/ts-exec scripts/check-browser-coverage.ts",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config . && npm run check:architecture",
     "format": "prettier --write .",
-    "typecheck": "tsc --noEmit && tsc --noEmit --project inertia/tsconfig.json"
+    "typecheck": "tsc --noEmit && tsc --noEmit --project inertia/tsconfig.json",
+    "check:architecture": "node --import=@poppinss/ts-exec scripts/check-architecture.ts"
   },
   "imports": {
     "#controllers/*": "./app/controllers/*.js",

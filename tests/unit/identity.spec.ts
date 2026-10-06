@@ -1,8 +1,8 @@
 import { test } from '@japa/runner'
-import { EmailAddress } from '../../app/modules/identity/domain/email-address.js'
-import { PlayerProfileInput } from '../../app/modules/identity/domain/player-profile-input.js'
-import { identityAccessFor } from '../../app/modules/identity/domain/identity-access.js'
-import { requestClientAddress } from '../../app/modules/identity/domain/request-client-address.js'
+import { EmailAddress } from '../../app/modules/identity/domain/email-address.ts'
+import { PlayerProfileInput } from '../../app/modules/identity/domain/player-profile-input.ts'
+import { identityAccessFor } from '../../app/modules/identity/domain/identity-access.ts'
+import { requestClientAddress } from '../../app/modules/identity/domain/request-client-address.ts'
 
 test('email identity ignores case and surrounding spaces, but preserves provider aliases', ({
   assert,

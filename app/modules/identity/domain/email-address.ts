@@ -1,4 +1,4 @@
-import { IdentityError } from './identity-error.js'
+import { IdentityError } from './identity-error.ts'
 
 export class EmailAddress {
   private constructor(readonly value: string) {}

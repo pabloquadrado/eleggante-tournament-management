@@ -1,14 +1,24 @@
+import { inject } from '@adonisjs/core'
 import type { HttpContext } from '@adonisjs/core/http'
-import { EmailAddress } from '../modules/identity/domain/email-address.js'
-import { PostgresOtpRequests } from '../modules/identity/infrastructure/postgres-otp-requests.js'
-import { PostgresOtpVerification } from '../modules/identity/infrastructure/postgres-otp-verification.js'
-import { PostgresIdentitySession } from '../modules/identity/infrastructure/postgres-identity-session.js'
-import { PostgresPlayerProfile } from '../modules/identity/infrastructure/postgres-player-profile.js'
-import { IdentityError } from '../modules/identity/domain/identity-error.js'
-import db from '@adonisjs/lucid/services/db'
-import { requestClientAddress } from '../modules/identity/domain/request-client-address.js'
+import { EmailAddress } from '../modules/identity/domain/email-address.ts'
+import { OtpRequests } from '../modules/identity/application/otp-requests.ts'
+import { OtpVerification } from '../modules/identity/application/otp-verification.ts'
+import { IdentitySession } from '../modules/identity/application/ports/identity-adapters.ts'
+import { IdentitySessions } from '../modules/identity/application/identity-sessions.ts'
+import { PlayerProfiles } from '../modules/identity/application/player-profiles.ts'
+import { IdentityError } from '../modules/identity/domain/identity-error.ts'
+import { requestClientAddress } from '../modules/identity/domain/request-client-address.ts'
 
+@inject()
 export default class IdentityController {
+  constructor(
+    private requests: OtpRequests,
+    private verification: OtpVerification,
+    private profiles: PlayerProfiles,
+    private identitySession: IdentitySession,
+    private sessions: IdentitySessions
+  ) {}
+
   async signIn({ inertia, response }: HttpContext) {
     response.header('cache-control', 'no-store')
     return inertia.render('identity/sign-in', { pending: null })
@@ -29,13 +39,13 @@ export default class IdentityController {
       return context.response.redirect('/onboarding')
     context.response.header('cache-control', 'no-store')
     return context.inertia.render('identity/profile', {
-      profile: await new PostgresPlayerProfile().read(context.auth.user!.id),
+      profile: await this.profiles.read(context.auth.user!.id),
       access,
     })
   }
 
   async logout({ session, response }: HttpContext) {
-    await db.from('sessions').where('id', session.sessionId).delete()
+    await this.sessions.revoke(session.sessionId)
     session.clear()
     session.regenerate()
     return response.noContent()
@@ -43,11 +53,11 @@ export default class IdentityController {
 
   async verify(context: HttpContext) {
     const { request, session } = context
-    const result = await new PostgresOtpVerification().verify(
+    const result = await this.verification.verify(
       request.input('challengeId'),
       request.input('code'),
       session.sessionId,
-      new PostgresIdentitySession(context),
+      this.identitySession,
       request.id()!
     )
     return { ...result, next: result.access === 'player' ? '/me' : '/onboarding' }
@@ -62,7 +72,7 @@ export default class IdentityController {
   async onboardingProfile(context: HttpContext) {
     const user = await this.actor(context)
     context.response.header('cache-control', 'no-store')
-    return { data: await new PostgresPlayerProfile().read(user.id) }
+    return { data: await this.profiles.read(user.id) }
   }
 
   async profile(context: HttpContext) {
@@ -70,12 +80,12 @@ export default class IdentityController {
     if (context.session.get('identityAccess') !== 'player')
       throw new IdentityError('Conclua seu perfil e aceite os documentos para continuar.', 403)
     context.response.header('cache-control', 'no-store')
-    return { data: await new PostgresPlayerProfile().read(user.id) }
+    return { data: await this.profiles.read(user.id) }
   }
 
   async updateOnboardingProfile(context: HttpContext) {
     const user = await this.actor(context)
-    const result = await new PostgresPlayerProfile().update(
+    const result = await this.profiles.update(
       user.id,
       context.request.all(),
       context.request.header('idempotency-key'),
@@ -90,7 +100,7 @@ export default class IdentityController {
 
   async confirmOnboardingPhone(context: HttpContext) {
     const user = await this.actor(context)
-    return new PostgresOtpVerification().confirmPhone(
+    return this.verification.confirmPhone(
       context.request.input('challengeId'),
       context.request.input('code'),
       context.session.sessionId,
@@ -106,7 +116,7 @@ export default class IdentityController {
 
   async cancelOnboardingPhone(context: HttpContext) {
     const user = await this.actor(context)
-    await new PostgresOtpRequests().cancelPhone(
+    await this.requests.cancelPhone(
       context.request.input('challengeId'),
       context.session.sessionId,
       user.id
@@ -126,12 +136,12 @@ export default class IdentityController {
 
   async status({ params, session, response }: HttpContext) {
     response.header('cache-control', 'no-store')
-    return new PostgresOtpRequests().status(params.id, session.sessionId)
+    return this.requests.status(params.id, session.sessionId)
   }
 
   async request({ request, session, response }: HttpContext) {
     const email = EmailAddress.parse(request.input('email'))
-    const result = await new PostgresOtpRequests().request(
+    const result = await this.requests.request(
       email,
       session.sessionId,
       requestClientAddress(request.request.socket.remoteAddress),

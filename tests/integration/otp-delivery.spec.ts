@@ -4,14 +4,17 @@ import mail from '@adonisjs/mail/services/main'
 import type { FakeMailer } from '@adonisjs/mail'
 import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
-import { IdentityBrowser } from '../support/identity-browser.js'
-import DispatchOtpOutboxJob from '../../app/jobs/dispatch-otp-outbox-job.js'
-import { PostgresOtpDeliveries } from '../../app/modules/identity/infrastructure/postgres-otp-deliveries.js'
+import { IdentityBrowser } from '../support/identity-browser.ts'
+import DispatchOtpOutboxJob from '../../app/jobs/dispatch-otp-outbox-job.ts'
+import app from '@adonisjs/core/services/app'
+import { OperationalEmails } from '../../app/modules/identity/application/operational-emails.ts'
 
 test.group('Operational OTP delivery', (group) => {
   let fake: FakeMailer
+  let emails: OperationalEmails
   group.each.setup(() => testUtils.db().truncate())
-  group.each.setup(() => {
+  group.each.setup(async () => {
+    emails = await app.container.make(OperationalEmails)
     fake = mail.fake()
     return () => mail.restore()
   })
@@ -42,7 +45,7 @@ test.group('Operational OTP delivery', (group) => {
     assert.equal(retry.delivery_state, 'pending')
     assert.equal(retry.attempt_count, 1)
     assert.equal(retry.payload_encrypted, row.payload_encrypted)
-    await new PostgresOtpDeliveries().deliver(row.id)
+    await emails.deliver(row.id)
     const notificationOutboxResult1 = await db.from('notification_outbox').firstOrFail()
     assert.equal(notificationOutboxResult1.attempt_count, 1)
     fake.transport.send = original
@@ -55,9 +58,9 @@ test.group('Operational OTP delivery', (group) => {
     const otpChallengesResult3 = await db.from('otp_challenges').firstOrFail()
     assert.deepEqual(otpChallengesResult3.expires_at, initial.expires_at)
     fake.messages.assertSentCount(1)
-    await new PostgresOtpDeliveries().deliver(row.id)
+    await emails.deliver(row.id)
     fake.messages.assertSentCount(1)
-    await new PostgresOtpDeliveries().deliver(randomUUID())
+    await emails.deliver(randomUUID())
   })
 
   test('repeated transport failures eventually invalidate the challenge and erase delivery material', async ({
@@ -89,7 +92,7 @@ test.group('Operational OTP delivery', (group) => {
       await db.from('otp_request_events').delete()
       const row = await pendingEmail()
       await db.from('otp_challenges').where('id', row.challenge_id).update(mutation)
-      await new PostgresOtpDeliveries().deliver(row.id)
+      await emails.deliver(row.id)
       const notificationOutboxResult5 = await db
         .from('notification_outbox')
         .where('id', row.id)
@@ -103,7 +106,7 @@ test.group('Operational OTP delivery', (group) => {
       .from('notification_outbox')
       .where('id', row.id)
       .update({ payload_encrypted: 'corrupt' })
-    await new PostgresOtpDeliveries().deliver(row.id)
+    await emails.deliver(row.id)
     const notificationOutboxResult6 = await db.from('notification_outbox').firstOrFail()
     assert.equal(notificationOutboxResult6.delivery_state, 'failed')
     fake.messages.assertNoneSent()

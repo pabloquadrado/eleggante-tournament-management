@@ -1,6 +1,6 @@
 import app from '@adonisjs/core/services/app'
 import { defineConfig, stores } from '@adonisjs/session'
-import { sessionPolicy } from '../app/modules/identity/domain/session-policy.js'
+import { sessionPolicy } from '../app/modules/identity/domain/session-policy.ts'
 
 const sessionConfig = defineConfig({
   /**

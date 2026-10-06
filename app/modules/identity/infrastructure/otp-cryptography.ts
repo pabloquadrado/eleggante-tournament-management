@@ -1,6 +1,6 @@
 import { createHmac, randomInt } from 'node:crypto'
 import env from '#start/env'
-import { otpPolicy } from '../domain/otp-policy.js'
+import { otpPolicy } from '../domain/otp-policy.ts'
 
 export function protectedKey(purpose: string, value: string): string {
   return createHmac('sha256', env.get('APP_KEY').release())

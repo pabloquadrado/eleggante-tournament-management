@@ -5,9 +5,9 @@ import mail from '@adonisjs/mail/services/main'
 import encryption from '@adonisjs/core/services/encryption'
 import { randomUUID } from 'node:crypto'
 import { setTimeout } from 'node:timers/promises'
-import { IdentityBrowser } from '../support/identity-browser.js'
-import { deliveredCode, signedInBrowser } from '../support/identity-fixtures.js'
-import DispatchOtpOutboxJob from '../../app/jobs/dispatch-otp-outbox-job.js'
+import { IdentityBrowser } from '../support/identity-browser.ts'
+import { deliveredCode, signedInBrowser } from '../support/identity-fixtures.ts'
+import DispatchOtpOutboxJob from '../../app/jobs/dispatch-otp-outbox-job.ts'
 import type { FakeMailer } from '@adonisjs/mail'
 
 test.group('Identity security and recovery', (group) => {

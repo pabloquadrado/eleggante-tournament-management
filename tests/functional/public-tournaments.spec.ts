@@ -1,8 +1,8 @@
 import { test } from '@japa/runner'
 import db from '@adonisjs/lucid/services/db'
 import testUtils from '@adonisjs/core/services/test_utils'
-import { captureBrowserCoverage } from '../support/browser-coverage.js'
-import { eventId, givenCatalog, givenTournament } from '../support/public-tournament-fixtures.js'
+import { captureBrowserCoverage } from '../support/browser-coverage.ts'
+import { eventId, givenCatalog, givenTournament } from '../support/public-tournament-fixtures.ts'
 
 test.group('Visitor tournament pages', (group) => {
   group.each.setup(() => testUtils.db().truncate())

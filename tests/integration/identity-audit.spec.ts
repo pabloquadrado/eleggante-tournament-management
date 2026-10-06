@@ -3,8 +3,8 @@ import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
 import mail from '@adonisjs/mail/services/main'
 import { randomUUID } from 'node:crypto'
-import { IdentityBrowser } from '../support/identity-browser.js'
-import { deliveredCode } from '../support/identity-fixtures.js'
+import { IdentityBrowser } from '../support/identity-browser.ts'
+import { deliveredCode } from '../support/identity-fixtures.ts'
 
 test.group('Private identity audit', (group) => {
   group.each.setup(() => testUtils.db().truncate())

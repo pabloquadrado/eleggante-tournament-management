@@ -1,12 +1,12 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
-import { IdentityBrowser } from '../support/identity-browser.js'
+import { IdentityBrowser } from '../support/identity-browser.ts'
 import db from '@adonisjs/lucid/services/db'
 import { randomUUID } from 'node:crypto'
-import { signedInBrowser } from '../support/identity-fixtures.js'
-import { deliveredCode } from '../support/identity-fixtures.js'
+import { signedInBrowser } from '../support/identity-fixtures.ts'
+import { deliveredCode } from '../support/identity-fixtures.ts'
 import app from '@adonisjs/core/services/app'
-import { ConsentPolicy } from '../../app/modules/identity/application/consent-policy.js'
+import { ConsentPolicy } from '../../app/modules/identity/application/consent-policy.ts'
 
 test.group('Email sign-in', (group) => {
   group.each.setup(() => testUtils.db().truncate())
@@ -118,7 +118,7 @@ test.group('Email sign-in', (group) => {
   }) => {
     const { default: mail } = await import('@adonisjs/mail/services/main')
     const { default: DispatchOtpOutboxJob } =
-      await import('../../app/jobs/dispatch-otp-outbox-job.js')
+      await import('../../app/jobs/dispatch-otp-outbox-job.ts')
     const fake = mail.fake()
     cleanup(() => mail.restore())
     const browser = await new IdentityBrowser().start()
@@ -146,7 +146,7 @@ test.group('Email sign-in', (group) => {
   }) => {
     const { default: mail } = await import('@adonisjs/mail/services/main')
     const { default: DispatchOtpOutboxJob } =
-      await import('../../app/jobs/dispatch-otp-outbox-job.js')
+      await import('../../app/jobs/dispatch-otp-outbox-job.ts')
     const fake = mail.fake()
     cleanup(() => mail.restore())
     fake.transport.send = async () => {
@@ -182,7 +182,7 @@ test.group('Email sign-in', (group) => {
   }) => {
     const { default: mail } = await import('@adonisjs/mail/services/main')
     const { default: DispatchOtpOutboxJob } =
-      await import('../../app/jobs/dispatch-otp-outbox-job.js')
+      await import('../../app/jobs/dispatch-otp-outbox-job.ts')
     const fake = mail.fake()
     cleanup(() => mail.restore())
     const browser = await new IdentityBrowser().start()
@@ -257,7 +257,7 @@ test.group('Email sign-in', (group) => {
   }) => {
     const { default: mail } = await import('@adonisjs/mail/services/main')
     const { default: DispatchOtpOutboxJob } =
-      await import('../../app/jobs/dispatch-otp-outbox-job.js')
+      await import('../../app/jobs/dispatch-otp-outbox-job.ts')
     const fake = mail.fake()
     cleanup(() => mail.restore())
     const browser = await signedInBrowser(fake)
@@ -532,7 +532,7 @@ test.group('Email sign-in', (group) => {
   }) => {
     const { default: mail } = await import('@adonisjs/mail/services/main')
     const { default: DispatchOtpOutboxJob } =
-      await import('../../app/jobs/dispatch-otp-outbox-job.js')
+      await import('../../app/jobs/dispatch-otp-outbox-job.ts')
     const fake = mail.fake()
     cleanup(() => mail.restore())
     const browser = await signedInBrowser(fake)

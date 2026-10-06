@@ -1,7 +1,7 @@
 import { Head } from '@inertiajs/react'
 import { Link } from '@inertiajs/react'
-import type { TournamentOverview } from '../../../app/modules/tournaments/domain/public-tournaments'
-import { formatTournamentDate, stateLabels } from '../../lib/tournament-presentation'
+import type { TournamentOverview } from '../../../app/modules/tournaments/domain/public-tournaments.ts'
+import { formatTournamentDate, stateLabels } from '../../lib/tournament-presentation.ts'
 
 export default function TournamentIndex({ tournaments }: { tournaments: TournamentOverview[] }) {
   return (

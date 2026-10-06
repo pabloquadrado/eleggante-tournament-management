@@ -1,7 +1,7 @@
 import { Head, router } from '@inertiajs/react'
 import { useState, type FormEvent } from 'react'
-import { identityRequest } from '../../lib/identity-http'
-import { useOtpChallenge, type OtpChallenge } from '../../lib/use-otp-challenge'
+import { identityRequest } from '../../lib/identity-http.ts'
+import { useOtpChallenge, type OtpChallenge } from '../../lib/use-otp-challenge.ts'
 
 export default function SignIn({
   pending,

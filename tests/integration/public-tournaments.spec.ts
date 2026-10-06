@@ -1,6 +1,6 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
-import { eventId, givenCatalog, givenTournament } from '../support/public-tournament-fixtures.js'
+import { eventId, givenCatalog, givenTournament } from '../support/public-tournament-fixtures.ts'
 
 test.group('Public tournaments', (group) => {
   group.each.setup(() => testUtils.db().truncate())

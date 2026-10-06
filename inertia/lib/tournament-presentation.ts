@@ -1,4 +1,4 @@
-import type { TournamentOverview } from '../../app/modules/tournaments/domain/public-tournaments'
+import type { TournamentOverview } from '../../app/modules/tournaments/domain/public-tournaments.ts'
 
 const tournamentTimeZone = 'America/Sao_Paulo'
 const utcNoonForCalendarDate = 'T12:00:00.000Z'

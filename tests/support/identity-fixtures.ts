@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { FakeMailer } from '@adonisjs/mail'
-import DispatchOtpOutboxJob from '../../app/jobs/dispatch-otp-outbox-job.js'
-import { IdentityBrowser } from './identity-browser.js'
+import DispatchOtpOutboxJob from '../../app/jobs/dispatch-otp-outbox-job.ts'
+import { IdentityBrowser } from './identity-browser.ts'
 
 export async function deliveredCode(
   browser: IdentityBrowser,

@@ -39,13 +39,13 @@ The V1 target covers EA FC tournaments, in person and online. It does not includ
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | Application     | Node.js 24, TypeScript, AdonisJS 7, Inertia/React, Vite                                                                       | One web application with public and administrative areas                       |
 | Data            | PostgreSQL 16 with Lucid migrations                                                                                           | Transactional source of truth for tournament state and history                 |
-| Code boundaries | Public-tournament domain and PostgreSQL adapter under `app/modules/tournaments`; HTTP controller and React pages at the edges | Domain and application rules independent of framework and persistence adapters |
+| Code boundaries | Identity and tournament modules with domain, application interfaces, and infrastructure; injected HTTP and queue entrypoints | Domain and application rules independent of framework and persistence adapters |
 | Background work | Database-backed worker recovers and delivers committed OTP emails                                                            | Transactional outbox and operational email delivery                            |
 | Local tooling   | Docker Compose, PostgreSQL, Mailpit                                                                                           | SMTP delivers operational sign-in and phone-change codes to local Mailpit     |
 | Tests           | Japa unit, HTTP/PostgreSQL integration, and Chromium functional suites; c8 and browser instrumentation enforce coverage       | Extend behavior and security tests as each V1 workflow is built                |
 | Production      | No production deployment is documented in this repository                                                                     | Coolify-managed containers and observability, subject to deployment checks     |
 
-The technical spec calls for SOLID, Object Calisthenics by default, an object-oriented domain where practical, Clean Architecture boundaries, and TDD. These are implementation rules, not claims that every planned module exists today.
+The technical spec calls for SOLID, Object Calisthenics by default, an object-oriented domain where practical, Clean Architecture boundaries, and TDD. Repository interfaces isolate persistence; `providers/module-bindings-provider.ts` wires their concrete adapters. See the [Mermaid folder and system maps](docs/code-map.md) and [permanent architecture rules](docs/agents/architecture.md). Source imports use `.ts` or `.tsx`; the production build emits JavaScript.
 
 ## Running locally (for the dev team)
 
@@ -73,7 +73,7 @@ docker compose --profile test run --rm tests npm run lint
 docker compose --profile test run --rm tests npm run test:coverage
 ```
 
-The coverage gate requires 100% statements, branches, functions, and lines per covered application file. Configuration, generated code, database maintenance files, the disabled SSR entrypoint, and type-only files are excluded.
+The coverage gate requires 100% statements, branches, functions, and lines per covered application file. Configuration and dependency-composition providers contain framework wiring and are outside application coverage. Generated code, database maintenance files, the disabled SSR entrypoint, and type-only files are also excluded. Application workflows and every concrete persistence/transport adapter remain covered.
 
 The commit hook scans staged changes with Gitleaks. CI scans Git history on every pull request.
 

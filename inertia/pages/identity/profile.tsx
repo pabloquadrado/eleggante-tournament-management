@@ -1,7 +1,8 @@
 import { Head, router } from '@inertiajs/react'
 import { useState, type FormEvent } from 'react'
-import { identityRequest } from '../../lib/identity-http'
-import { useOtpChallenge, type OtpChallenge } from '../../lib/use-otp-challenge'
+import { identityRequest } from '../../lib/identity-http.ts'
+import { useOtpChallenge, type OtpChallenge } from '../../lib/use-otp-challenge.ts'
+import { maskPhoneInput } from '../../lib/phone-input.ts'
 
 type Profile = {
   id: string
@@ -23,7 +24,7 @@ export default function PlayerProfile({
   const [current, setCurrent] = useState(profile)
   const [name, setName] = useState(profile.name ?? '')
   const [username, setUsername] = useState(profile.username ?? '')
-  const [phone, setPhone] = useState(profile.phone ?? '')
+  const [phone, setPhone] = useState(() => maskPhoneInput(profile.phone ?? ''))
   const [challenge, setChallenge] = useState<OtpChallenge | null>(null)
   const [code, setCode] = useState('')
   const [message, setMessage] = useState('')
@@ -140,11 +141,13 @@ export default function PlayerProfile({
           Celular com DDD
           <input
             type="tel"
+            inputMode="tel"
             autoComplete="tel"
+            pattern="\+55 \([0-9]{2}\) [0-9]{5}-[0-9]{4}"
             disabled={busy || challenge !== null}
-            placeholder="+5551999009633"
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
+            placeholder="+55 (00) 00000-0000"
+            value={maskPhoneInput(phone)}
+            onChange={(event) => setPhone(maskPhoneInput(event.target.value))}
             required
           />
         </label>
