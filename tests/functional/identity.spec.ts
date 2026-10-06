@@ -163,7 +163,14 @@ test.group('Player email sign-in', (group) => {
     assert.isTrue(await page.getByRole('button', { name: 'Reenviar código' }).isDisabled())
     await page.clock.fastForward(61_000)
     await db.from('otp_request_events').delete()
+    const resend = page.waitForResponse(
+      (reply) =>
+        reply.request().method() === 'POST' &&
+        new URL(reply.url()).pathname === '/api/v1/auth/otp/request'
+    )
     await page.getByRole('button', { name: 'Reenviar código' }).click()
+    const resent = await resend
+    assert.equal(resent.status(), 202)
     fake.transport.send = async () => {
       throw Object.assign(new Error('Private SMTP failure'), { responseCode: 550 })
     }
@@ -226,8 +233,16 @@ test.group('Player email sign-in', (group) => {
     await page.clock.install()
     await page.clock.fastForward(61_000)
     await db.from('otp_request_events').delete()
+    const deliveredBeforeResend = fake.messages.sent().length
+    const resend = page.waitForResponse(
+      (reply) =>
+        reply.request().method() === 'PATCH' && new URL(reply.url()).pathname === '/api/v1/me'
+    )
     await page.getByRole('button', { name: 'Solicitar novo código' }).click()
+    const resent = await resend
+    assert.equal(resent.status(), 202)
     await new DispatchOtpOutboxJob().execute()
+    fake.messages.assertSentCount(deliveredBeforeResend + 1)
     await page.getByLabel('Código para alterar o celular').fill(lastCode())
     await page.getByRole('button', { name: 'Confirmar celular' }).click()
     await page.getByText('Perfil salvo.').waitFor()
