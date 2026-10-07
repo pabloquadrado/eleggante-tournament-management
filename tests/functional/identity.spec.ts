@@ -260,53 +260,67 @@ test.group('Player email sign-in', (group) => {
     await captureBrowserCoverage(page, 'identity-public-privacy')
   })
 
-  test('a canceled phone change ignores a late delivery status and missing security cookies have a handled error', async ({
-    visit,
-    assert,
-  }) => {
-    const page = await visit('/sign-in')
-    await page.getByLabel('E-mail').waitFor()
-    await page.context().clearCookies({ name: 'XSRF-TOKEN' })
-    await page.getByLabel('E-mail').fill('player@example.com')
-    await page.getByRole('button', { name: 'Enviar código' }).click()
-    await page
-      .getByText('Sua sessão de segurança expirou. Atualize a página e tente novamente.')
-      .waitFor()
-    await captureBrowserCoverage(page, 'missing-security-cookie')
-    await page.reload()
-    await enterEmail(page)
-    await verifyEmail(page)
-    await page.getByLabel('Nome de exibição').fill('Pablo')
-    await page.getByLabel('Nome de usuário').fill('pablo')
-    await page.getByLabel('Celular com DDD').fill('+5551999009633')
-    await page.getByRole('button', { name: 'Salvar perfil' }).click()
-    await page.getByText('Perfil salvo.').waitFor()
-    await db.from('otp_request_events').delete()
-    await page.getByLabel('Celular com DDD').fill('+5551999009634')
-    await page.getByRole('button', { name: 'Salvar perfil' }).click()
-    await page.getByLabel('Código para alterar o celular').waitFor()
-    let held!: Route
-    let notify!: () => void
-    const requested = new Promise<void>((resolve) => {
-      notify = resolve
+  for (const lateStatus of ['success', 'failure']) {
+    test(`a canceled phone change ignores a late status ${lateStatus} and missing security cookies have a handled error`, async ({
+      visit,
+      assert,
+    }) => {
+      const page = await visit('/sign-in')
+      await page.clock.install()
+      await page.getByLabel('E-mail').waitFor()
+      await page.context().clearCookies({ name: 'XSRF-TOKEN' })
+      await page.getByLabel('E-mail').fill('player@example.com')
+      await page.getByRole('button', { name: 'Enviar código' }).click()
+      await page
+        .getByText('Sua sessão de segurança expirou. Atualize a página e tente novamente.')
+        .waitFor()
+      await captureBrowserCoverage(page, 'missing-security-cookie')
+      await page.reload()
+      await enterEmail(page)
+      await verifyEmail(page)
+      await page.getByLabel('Nome de exibição').fill('Pablo')
+      await page.getByLabel('Nome de usuário').fill('pablo')
+      await page.getByLabel('Celular com DDD').fill('+5551999009633')
+      await page.getByRole('button', { name: 'Salvar perfil' }).click()
+      await page.getByText('Perfil salvo.').waitFor()
+      await db.from('otp_request_events').delete()
+      await page.getByLabel('Celular com DDD').fill('+5551999009634')
+      await page.getByRole('button', { name: 'Salvar perfil' }).click()
+      await page.getByLabel('Código para alterar o celular').waitFor()
+      let held!: Route
+      let notify!: () => void
+      const requested = new Promise<void>((resolve) => {
+        notify = resolve
+      })
+      await page.route('**/api/v1/auth/otp/*', (route) => {
+        held = route
+        notify()
+      })
+      await page.clock.fastForward(5100)
+      await requested
+      await page.getByRole('button', { name: 'Cancelar alteração' }).click()
+      await page.getByText('Alteração cancelada. Seu celular atual foi mantido.').waitFor()
+      const response =
+        lateStatus === 'success'
+          ? page.waitForResponse(
+              (reply) =>
+                reply.request().method() === 'GET' && reply.url().includes('/api/v1/auth/otp/')
+            )
+          : page.waitForEvent('requestfailed', {
+              predicate: (request) =>
+                request.method() === 'GET' && request.url().includes('/api/v1/auth/otp/'),
+            })
+      if (lateStatus === 'success') {
+        await held.fulfill({ status: 200, json: { message: 'Late delivery status' } })
+      } else {
+        await held.abort()
+      }
+      await response
+      await page.evaluate('new Promise(resolve => requestAnimationFrame(resolve))')
+      assert.equal(await page.getByText('Late delivery status').count(), 0)
+      assert.equal(await page.getByText('Não foi possível conectar. Tente novamente.').count(), 0)
+      await page.getByText('Alteração cancelada. Seu celular atual foi mantido.').waitFor()
+      await captureBrowserCoverage(page, `canceled-phone-status-${lateStatus}`)
     })
-    await page.route('**/api/v1/auth/otp/*', (route) => {
-      held = route
-      notify()
-    })
-    await page.clock.install()
-    await page.clock.fastForward(5100)
-    await requested
-    await page.getByRole('button', { name: 'Cancelar alteração' }).click()
-    await page.getByText('Alteração cancelada. Seu celular atual foi mantido.').waitFor()
-    const response = page.waitForResponse(
-      (reply) => reply.request().method() === 'GET' && reply.url().includes('/api/v1/auth/otp/')
-    )
-    await held.fulfill({ status: 200, json: { message: 'Late delivery status' } })
-    await response
-    await page.evaluate('new Promise(resolve => requestAnimationFrame(resolve))')
-    assert.equal(await page.getByText('Late delivery status').count(), 0)
-    await page.getByText('Alteração cancelada. Seu celular atual foi mantido.').waitFor()
-    await captureBrowserCoverage(page, 'canceled-phone-status')
-  })
+  }
 })

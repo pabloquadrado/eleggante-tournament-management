@@ -268,6 +268,58 @@ test.group('Identity security and recovery', (group) => {
     assert.lengthOf(users, 1)
   })
 
+  test('a failed profile write rolls back changes and permits retry with the same key', async ({
+    assert,
+    cleanup,
+  }) => {
+    const browser = await signedInBrowser(fake)
+    const original = await db.from('users').firstOrFail()
+    const input = { name: 'Pablo', username: 'pablo', phone: '+5551999009633', version: 1 }
+    const key = randomUUID()
+    await db.rawQuery(`CREATE FUNCTION test_reject_profile_write() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'Profile write unavailable'; END $$;
+      CREATE TRIGGER test_reject_profile_write AFTER UPDATE ON users
+      FOR EACH ROW EXECUTE FUNCTION test_reject_profile_write()`)
+    cleanup(async () => {
+      await db.rawQuery(
+        'DROP TRIGGER IF EXISTS test_reject_profile_write ON users; DROP FUNCTION IF EXISTS test_reject_profile_write()'
+      )
+    })
+
+    const rejected = await browser.request('/api/v1/onboarding/profile', 'PATCH', input, key)
+    assert.equal(rejected.status, 500)
+    assert.deepEqual(await rejected.json(), {
+      errors: { general: 'Não foi possível concluir a solicitação. Tente novamente.' },
+    })
+    const unchanged = await db.from('users').where('id', original.id).firstOrFail()
+    assert.deepEqual(unchanged, original)
+    const commands = await db.from('profile_commands').where('user_id', original.id)
+    assert.lengthOf(commands, 0)
+    const updates = await db
+      .from('audit_events')
+      .where('entity_id', original.id)
+      .where('operation', 'updated')
+    assert.lengthOf(updates, 0)
+
+    await db.rawQuery(
+      'DROP TRIGGER test_reject_profile_write ON users; DROP FUNCTION test_reject_profile_write()'
+    )
+    const recovered = await browser.request('/api/v1/onboarding/profile', 'PATCH', input, key)
+    assert.equal(recovered.status, 200)
+    const saved = await db.from('users').where('id', original.id).firstOrFail()
+    assert.equal(saved.name, input.name)
+    assert.equal(saved.username, input.username)
+    assert.equal(saved.phone, input.phone)
+    assert.equal(saved.version, 2)
+    const committedCommands = await db.from('profile_commands').where('user_id', original.id)
+    assert.lengthOf(committedCommands, 1)
+    const committedUpdates = await db
+      .from('audit_events')
+      .where('entity_id', original.id)
+      .where('operation', 'updated')
+    assert.lengthOf(committedUpdates, 1)
+  })
+
   test('an unavailable outbox rolls back the challenge and queues no email', async ({
     assert,
     cleanup,
