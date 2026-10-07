@@ -176,3 +176,10 @@ dd {
     margin-top: 28px;
   }
 }
+/* Shared accessible form layout for identity and onboarding. */
+.arena-form { display: grid; gap: 1rem; max-width: 28rem; margin: 1.5rem 0; }
+.arena-form label { display: grid; gap: 0.4rem; }
+.arena-form input { font: inherit; padding: 0.65rem; border: 1px solid #737373; border-radius: 0.3rem; }
+button { font: inherit; cursor: pointer; padding: 0.65rem 1rem; }
+button:disabled { cursor: wait; opacity: 0.6; }
+input:focus-visible, button:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }

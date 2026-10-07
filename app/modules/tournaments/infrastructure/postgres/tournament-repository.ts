@@ -1,12 +1,6 @@
+import { TournamentRepository } from '../../application/tournament-repository.ts'
 import db from '@adonisjs/lucid/services/db'
-import {
-  isListedPublicly,
-  isVisibleAtDirectUrl,
-  toPublicTournament,
-  tournamentStates,
-  type TournamentOverview,
-  type TournamentState,
-} from '../domain/public-tournaments.js'
+import { type TournamentOverview, type TournamentState } from '../../domain/public-tournaments.ts'
 
 type TournamentRow = {
   id: string
@@ -32,7 +26,7 @@ function timestampValue(value: Date): string {
 }
 
 function project(row: TournamentRow): TournamentOverview {
-  return toPublicTournament({
+  return {
     id: row.id,
     title: row.title,
     version: row.version,
@@ -45,7 +39,7 @@ function project(row: TournamentRow): TournamentOverview {
     gameEdition: row.game_edition,
     createdAt: timestampValue(row.created_at),
     updatedAt: timestampValue(row.updated_at),
-  })
+  }
 }
 
 function query() {
@@ -68,18 +62,18 @@ function query() {
     )
 }
 
-export class PostgresPublicTournamentCatalog {
-  async list(): Promise<TournamentOverview[]> {
-    const states = tournamentStates.filter(isListedPublicly)
+export class PostgresTournamentRepository extends TournamentRepository {
+  async list(states: readonly TournamentState[]): Promise<TournamentOverview[]> {
     const rows = (await query()
-      .whereIn('tournament.state', states)
+      .whereIn('tournament.state', [...states])
       .orderBy('tournament.created_at', 'desc')) as TournamentRow[]
+
     return rows.map(project)
   }
 
   async find(id: string): Promise<TournamentOverview | null> {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return null
     const row = (await query().where('tournament.id', id).first()) as TournamentRow | undefined
-    return row && isVisibleAtDirectUrl(row.state) ? project(row) : null
+
+    return row ? project(row) : null
   }
 }

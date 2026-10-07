@@ -58,6 +58,9 @@ export default defineConfig({
     () => import('@adonisjs/cors/cors_provider'),
     () => import('@adonisjs/inertia/inertia_provider'),
     () => import('@adonisjs/queue/queue_provider'),
+    () => import('@adonisjs/mail/mail_provider'),
+    () => import('@adonisjs/auth/auth_provider'),
+    () => import('./providers/module-bindings-provider.ts'),
   ],
 
   /*
@@ -86,17 +89,17 @@ export default defineConfig({
   tests: {
     suites: [
       {
-        files: ['tests/unit/**/*.spec.{ts,js}', 'inertia/tests/**/*.spec.{ts,js}'],
+        files: ['tests/unit/**/*.spec.ts', 'inertia/tests/**/*.spec.ts'],
         name: 'unit',
         timeout: 2000,
       },
       {
-        files: ['tests/integration/**/*.spec.{ts,js}'],
+        files: ['tests/integration/**/*.spec.ts'],
         name: 'integration',
         timeout: 30000,
       },
       {
-        files: ['tests/functional/**/*.spec.{ts,js}'],
+        files: ['tests/functional/**/*.spec.ts'],
         name: 'functional',
         timeout: 300000,
       },

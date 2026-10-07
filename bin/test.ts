@@ -30,6 +30,7 @@ const IMPORTER = (filePath: string) => {
   if (filePath.startsWith('./') || filePath.startsWith('../')) {
     return import(new URL(filePath, APP_ROOT).href)
   }
+
   return import(filePath)
 }
 
@@ -43,7 +44,7 @@ new Ignitor(APP_ROOT, { importer: IMPORTER })
   })
   .testRunner()
   .configure(async (app) => {
-    const { runnerHooks, ...config } = await import('../tests/bootstrap.js')
+    const { runnerHooks, ...config } = await import('../tests/bootstrap.ts')
 
     processCLIArgs(process.argv.splice(2))
     configure({

@@ -9,6 +9,7 @@ export async function captureBrowserCoverage(page: Page, name: string): Promise<
   if (!coverage || typeof coverage !== 'object' || Object.keys(coverage).length === 0) {
     const scriptElements = await page.locator('script[src]').all()
     const scripts = await Promise.all(scriptElements.map((script) => script.getAttribute('src')))
+
     throw new Error(
       `Browser coverage is missing. Set VITE_COVERAGE=true. Loaded scripts: ${JSON.stringify(scripts)}`
     )

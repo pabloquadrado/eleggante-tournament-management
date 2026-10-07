@@ -5,7 +5,7 @@ import {
   isVisibleAtDirectUrl,
   toPublicTournament,
   tournamentStates,
-} from '../../app/modules/tournaments/domain/public-tournaments.js'
+} from '../../app/modules/tournaments/domain/public-tournaments.ts'
 
 test('a visitor sees only published tournaments in the default list', ({ assert }) => {
   const listed = tournamentStates.filter(isListedPublicly)

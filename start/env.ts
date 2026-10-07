@@ -31,4 +31,10 @@ export default await Env.create(new URL('../', import.meta.url), {
   DB_PASSWORD: Env.schema.string(),
   DB_DATABASE: Env.schema.string(),
   QUEUE_DRIVER: Env.schema.enum(['database', 'sync'] as const),
+  SMTP_HOST: Env.schema.string.optional(),
+  SMTP_PORT: Env.schema.number.optional(),
+  SMTP_SECURE: Env.schema.boolean.optional(),
+  SMTP_FROM: Env.schema.string.optional(),
+  SMTP_USERNAME: Env.schema.string.optional(),
+  SMTP_PASSWORD: Env.schema.secret.optional(),
 })

@@ -1,4 +1,4 @@
-import type { TournamentOverview } from '../../app/modules/tournaments/domain/public-tournaments'
+import type { TournamentOverview } from '../../app/modules/tournaments/domain/public-tournaments.ts'
 
 const tournamentTimeZone = 'America/Sao_Paulo'
 const utcNoonForCalendarDate = 'T12:00:00.000Z'
@@ -24,5 +24,6 @@ export const stateLabels: Record<TournamentOverview['state'], string> = {
 
 export function formatTournamentDate(value: string | null, fallback: string): string {
   if (!value) return fallback
+
   return dateFormatter.format(new Date(`${value}${utcNoonForCalendarDate}`))
 }
