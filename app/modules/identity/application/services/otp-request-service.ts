@@ -1,64 +1,18 @@
-import { type EmailAddress } from '../domain/email-address.ts'
-import { IdentityError } from '../domain/identity-error.ts'
-import { isIdentifier } from '../domain/identifier.ts'
-import { otpPolicy, otpRequestMessage } from '../domain/otp-policy.ts'
-import type { OtpChallenge, PhoneChangeIntent } from '../domain/identity-records.ts'
-import { type IdentitySecrets } from './ports/identity-adapters.ts'
+import type { EmailAddress } from '../../domain/email-address.ts'
+import { IdentityError } from '../../domain/identity-error.ts'
+import { isIdentifier } from '../../domain/identifier.ts'
 import {
-  type IdentityQueries,
-  type IdentityUnitOfWork,
-  type IdentityRepositories,
-} from './ports/identity-repositories.ts'
+  otpPolicy,
+  otpRequestMessage,
+  assertOtpCooldown,
+  assertOtpRequestCounts,
+} from '../../domain/otp-policy.ts'
+import type { OtpChallenge, PhoneChangeIntent } from '../../domain/identity-records.ts'
+import type { IdentitySecrets } from '../ports/identity-adapters.ts'
+import type { IdentityRepositories } from '../ports/identity-repositories.ts'
 
-export class OtpRequests {
-  constructor(
-    private work: IdentityUnitOfWork,
-    private queries: IdentityQueries,
-    private secrets: IdentitySecrets
-  ) {}
-
-  async cancelPhone(id: unknown, browserId: string, userId: string) {
-    if (!isIdentifier(id)) throw new IdentityError('Solicitação não encontrada.', 404)
-
-    await this.work.write(async ({ challenges, outbox }) => {
-      const challenge = await challenges.forBrowser(
-        id,
-        this.secrets.key('browser', browserId),
-        'phone_change',
-        userId
-      )
-
-      if (!challenge) throw new IdentityError('Solicitação não encontrada.', 404)
-
-      if (challenge.consumedAt)
-        throw new IdentityError('Esta alteração já foi confirmada. Atualize a página.', 409)
-
-      const now = new Date()
-
-      await challenges.cancel(id, now)
-      await outbox.cancelPending(id, now)
-    })
-  }
-
-  async status(id: string, browserId: string) {
-    if (!isIdentifier(id)) throw new IdentityError('Solicitação não encontrada.', 404)
-
-    const state = await this.queries.deliveryStatus(id, this.secrets.key('browser', browserId))
-
-    if (!state) throw new IdentityError('Solicitação não encontrada.', 404)
-
-    return state === 'failed'
-      ? {
-          state: 'failed',
-          message:
-            'Não foi possível entregar o código. Confira o e-mail informado e tente novamente.',
-        }
-      : {
-          state: 'pending',
-          message:
-            'Confira sua caixa de entrada e a pasta de spam. Se o código não chegar, confira o e-mail informado.',
-        }
-  }
+export class OtpRequestService {
+  constructor(private secrets: IdentitySecrets) {}
 
   async request(
     email: EmailAddress,
@@ -66,8 +20,8 @@ export class OtpRequests {
     ip: string,
     requestKey: unknown,
     requestId: string,
-    intent?: PhoneChangeIntent,
-    parent?: IdentityRepositories
+    repositories: IdentityRepositories,
+    intent?: PhoneChangeIntent
   ) {
     if (!isIdentifier(requestKey))
       throw new IdentityError('Envie uma chave válida para esta solicitação.', 422)
@@ -76,7 +30,7 @@ export class OtpRequests {
     const emailKey = this.secrets.key('email', email.value)
     const replayKey = this.secrets.key('request', `${browserId}:${requestKey}`)
     const intentKey = this.secrets.key('otp-intent', JSON.stringify(intent ?? 'sign_in'))
-    const execute = async (repositories: IdentityRepositories) => {
+    const create = async () => {
       const { challenges, limits, outbox, audit } = repositories
       const existing = await challenges.replay(replayKey)
 
@@ -87,10 +41,9 @@ export class OtpRequests {
         return existing
       }
 
-      if (
+      assertOtpCooldown(
         await limits.hasRecent(emailKey, new Date(now.getTime() - otpPolicy.resendSeconds * 1000))
       )
-        throw new IdentityError('Aguarde um pouco antes de solicitar outro código.', 429)
 
       const ipKey = this.secrets.key('ip', ip)
       const counts = await limits.counts(
@@ -99,8 +52,7 @@ export class OtpRequests {
         new Date(now.getTime() - otpPolicy.windowSeconds * 1000)
       )
 
-      if (counts.email >= otpPolicy.emailRequestLimit || counts.ip >= otpPolicy.ipRequestLimit)
-        throw new IdentityError('Aguarde um pouco antes de solicitar outro código.', 429)
+      assertOtpRequestCounts(counts)
 
       const id = this.secrets.id()
       const code = this.secrets.code()
@@ -139,7 +91,7 @@ export class OtpRequests {
 
       return challenge
     }
-    const challenge = parent ? await execute(parent) : await this.work.write(execute)
+    const challenge = await create()
 
     return {
       challengeId: challenge.id,

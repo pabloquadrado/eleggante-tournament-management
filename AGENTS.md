@@ -18,11 +18,11 @@ Write repository instructions, domain docs, ADRs, issues, specifications, plans,
 
 ### Architecture and TypeScript
 
-Follow SOLID and the repository pattern. Controllers, jobs, commands, and event handlers delegate workflows to the application layer. Application workflows depend on focused repository and adapter interfaces; concrete implementations are wired in the composition root. Keep SQL, ORM queries, database transactions, and persistence models inside infrastructure adapters, migrations, seeders, and explicit database test fixtures. Domain and application code remain independent of AdonisJS, PostgreSQL, and HTTP context types. Preserve atomicity, locking, authorization, idempotency, and audit behavior when changing these seams.
+Follow SOLID and the repository pattern. Controllers, jobs, commands, and event handlers delegate domain operations to application use cases. Application use cases depend on focused repository and adapter interfaces; concrete implementations are wired in the composition root. Keep SQL, ORM queries, database transactions, and persistence models inside infrastructure adapters, migrations, seeders, and explicit database test fixtures. Domain and application code remain independent of AdonisJS, PostgreSQL, and HTTP context types. Preserve atomicity, locking, authorization, idempotency, and audit behavior when changing these seams.
 
 Write project source in TypeScript. Reference project-owned modules with explicit `.ts` or `.tsx` import specifiers, including dynamic imports; use package imports for external dependencies and framework aliases where configured. Generated JavaScript and package runtime resolution metadata belong to the build, not to source import conventions.
 
-Before changing module interfaces, persistence, dependency injection, entrypoints, or folder organization, read `docs/agents/architecture.md`. Maintain the Mermaid system and folder maps in `docs/code-map.md` whenever those relationships change. Run the architecture check, type checks, and behavior tests appropriate to the change; architecture changes also require the full coverage gate.
+Before adding or changing entrypoints, use cases, reusable business rules, module interfaces, persistence, dependency injection, or folder organization, read `docs/agents/architecture.md`. Maintain the Mermaid system and folder maps in `docs/code-map.md` whenever those relationships change. Run the architecture check, type checks, and behavior tests appropriate to the change; architecture changes also require the full coverage gate.
 
 ### Phone inputs
 

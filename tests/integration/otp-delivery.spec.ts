@@ -7,15 +7,15 @@ import db from '@adonisjs/lucid/services/db'
 import { IdentityBrowser } from '../support/identity-browser.ts'
 import DispatchOtpOutboxJob from '../../app/jobs/dispatch-otp-outbox-job.ts'
 import app from '@adonisjs/core/services/app'
-import { OperationalEmails } from '../../app/modules/identity/application/operational-emails.ts'
+import { DeliverOtpEmailUseCase } from '../../app/modules/identity/application/use-cases/deliver-otp-email-use-case.ts'
 
 test.group('Operational OTP delivery', (group) => {
   let fake: FakeMailer
-  let emails: OperationalEmails
+  let emails: DeliverOtpEmailUseCase
 
   group.each.setup(() => testUtils.db().truncate())
   group.each.setup(async () => {
-    emails = await app.container.make(OperationalEmails)
+    emails = await app.container.make(DeliverOtpEmailUseCase)
     fake = mail.fake()
 
     return () => mail.restore()
@@ -51,7 +51,7 @@ test.group('Operational OTP delivery', (group) => {
     assert.equal(retry.delivery_state, 'pending')
     assert.equal(retry.attempt_count, 1)
     assert.equal(retry.payload_encrypted, row.payload_encrypted)
-    await emails.deliver(row.id)
+    await emails.execute({ outboxId: row.id })
     const notificationOutboxResult1 = await db.from('notification_outbox').firstOrFail()
 
     assert.equal(notificationOutboxResult1.attempt_count, 1)
@@ -67,9 +67,9 @@ test.group('Operational OTP delivery', (group) => {
 
     assert.deepEqual(otpChallengesResult3.expires_at, initial.expires_at)
     fake.messages.assertSentCount(1)
-    await emails.deliver(row.id)
+    await emails.execute({ outboxId: row.id })
     fake.messages.assertSentCount(1)
-    await emails.deliver(randomUUID())
+    await emails.execute({ outboxId: randomUUID() })
   })
 
   test('repeated transport failures eventually invalidate the challenge and erase delivery material', async ({
@@ -106,7 +106,7 @@ test.group('Operational OTP delivery', (group) => {
       const row = await pendingEmail()
 
       await db.from('otp_challenges').where('id', row.challenge_id).update(mutation)
-      await emails.deliver(row.id)
+      await emails.execute({ outboxId: row.id })
       const notificationOutboxResult5 = await db
         .from('notification_outbox')
         .where('id', row.id)
@@ -123,7 +123,7 @@ test.group('Operational OTP delivery', (group) => {
       .from('notification_outbox')
       .where('id', row.id)
       .update({ payload_encrypted: 'corrupt' })
-    await emails.deliver(row.id)
+    await emails.execute({ outboxId: row.id })
     const notificationOutboxResult6 = await db.from('notification_outbox').firstOrFail()
 
     assert.equal(notificationOutboxResult6.delivery_state, 'failed')

@@ -1,11 +1,11 @@
 import { Job } from '@adonisjs/queue'
 import app from '@adonisjs/core/services/app'
-import { OperationalEmails } from '../modules/identity/application/operational-emails.ts'
+import { DispatchPendingOtpEmailsUseCase } from '../modules/identity/application/use-cases/dispatch-pending-otp-emails-use-case.ts'
 
 export default class DispatchOtpOutboxJob extends Job {
   async execute() {
-    const emails = await app.container.make(OperationalEmails)
+    const emails = await app.container.make(DispatchPendingOtpEmailsUseCase)
 
-    await emails.dispatchPending()
+    await emails.execute({})
   }
 }

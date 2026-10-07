@@ -1,39 +1,17 @@
-import { otpPolicy } from '../domain/otp-policy.ts'
-import { type OtpDeliveryQueue, type OtpMailTransport } from './ports/identity-adapters.ts'
-import {
-  type IdentityQueries,
-  type IdentityRetentionRepository,
-  type IdentityUnitOfWork,
-} from './ports/identity-repositories.ts'
+import { deliveryPolicy } from '../../domain/otp-delivery-policy.ts'
+import { isActiveOtpChallenge } from '../../domain/otp-challenge-policy.ts'
+import type { OtpMailTransport } from '../ports/identity-adapters.ts'
+import type { IdentityUnitOfWork } from '../ports/identity-repositories.ts'
 
-const deliveryPolicy = {
-  maxAttempts: 5,
-  backoffSeconds: 30,
-  replayRetentionMilliseconds: 24 * 60 * 60 * 1000,
-} as const
-
-export class OperationalEmails {
+export class DeliverOtpEmailUseCase {
   constructor(
     private work: IdentityUnitOfWork,
-    private queries: IdentityQueries,
-    private retention: IdentityRetentionRepository,
-    private transport: OtpMailTransport,
-    private queue: OtpDeliveryQueue
+    private transport: OtpMailTransport
   ) {}
 
-  async dispatchPending() {
-    const now = new Date()
+  async execute(input: { outboxId: string }): Promise<void> {
+    const id = input.outboxId
 
-    await this.retention.clean({
-      now,
-      requestCutoff: new Date(now.getTime() - otpPolicy.windowSeconds * 1000),
-      replayCutoff: new Date(now.getTime() - deliveryPolicy.replayRetentionMilliseconds),
-    })
-
-    for (const id of await this.queries.pendingDeliveryIds(now)) await this.queue.enqueue(id)
-  }
-
-  async deliver(id: string) {
     await this.work.delivery(async ({ challenges, outbox }) => {
       const reference = await outbox.find(id)
 
@@ -46,7 +24,7 @@ export class OperationalEmails {
 
       if (delivery.state !== 'pending' || delivery.nextAttemptAt > now) return
 
-      if (challenge.invalidatedAt || challenge.consumedAt || challenge.expiresAt <= now) {
+      if (!isActiveOtpChallenge(challenge, now)) {
         await outbox.discard(id, now)
 
         return

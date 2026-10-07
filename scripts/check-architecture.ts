@@ -85,6 +85,33 @@ for (const file of await sources(root)) {
     errors.push(`${path}:${line}: ${message}`)
   }
 
+  if (/\/application\/use-cases\//.test(path)) {
+    const classes = source.statements.filter(
+      (statement): statement is ts.ClassDeclaration =>
+        ts.isClassDeclaration(statement) &&
+        Boolean(
+          statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+        )
+    )
+
+    if (classes.length !== 1) report(source, 'Export one use-case class per operation.')
+
+    for (const declaration of classes) {
+      const operations = declaration.members.filter(
+        (member) =>
+          (ts.isMethodDeclaration(member) ||
+            ts.isGetAccessorDeclaration(member) ||
+            ts.isSetAccessorDeclaration(member)) &&
+          !member.modifiers?.some((modifier) =>
+            [ts.SyntaxKind.PrivateKeyword, ts.SyntaxKind.ProtectedKeyword].includes(modifier.kind)
+          )
+      )
+
+      if (operations.length !== 1 || operations[0].name?.getText(source) !== 'execute')
+        report(declaration, 'A use case exposes one public operation: execute(input).')
+    }
+  }
+
   function check(node: ts.Node) {
     let specifier: ts.Node | undefined
 
@@ -108,6 +135,28 @@ for (const file of await sources(root)) {
       const target = projectTarget(file, name)
 
       dependencies.push({ target, name, node: specifier })
+
+      const typeOnly =
+        ts.isImportTypeNode(node) ||
+        (ts.isImportDeclaration(node) &&
+          (node.importClause?.isTypeOnly ||
+            (node.importClause?.namedBindings &&
+              !node.importClause.name &&
+              ts.isNamedImports(node.importClause.namedBindings) &&
+              node.importClause.namedBindings.elements.length > 0 &&
+              node.importClause.namedBindings.elements.every((element) => element.isTypeOnly)))) ||
+        (ts.isExportDeclaration(node) && node.isTypeOnly)
+
+      if (entrypoint && target && !typeOnly) {
+        if (/\/application\//.test(target) && !/\/application\/(?:use-cases|ports)\//.test(target))
+          report(specifier, 'Enter application behavior through a use case, not a shared service.')
+
+        if (/\/domain\//.test(target) && !/\/[^/]+-error\.ts$/.test(target))
+          report(
+            specifier,
+            'Delegate domain behavior to a use case; import only domain types or errors here.'
+          )
+      }
 
       if (target && /\.(?:js|jsx|mjs|cjs)$/.test(name))
         report(specifier, 'Import project source with .ts or .tsx.')
@@ -194,4 +243,7 @@ for (const [entrypoint, source] of entrypoints) {
 if (errors.length) {
   console.error(errors.join('\n'))
   process.exitCode = 1
-} else console.log('Architecture check passed: TypeScript imports and inward dependencies.')
+} else
+  console.log(
+    'Architecture check passed: TypeScript imports, use-case entrypoints, and inward dependencies.'
+  )

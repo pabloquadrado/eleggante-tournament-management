@@ -11,12 +11,26 @@ import {
   OtpDeliveryQueue,
   OtpMailTransport,
 } from '../app/modules/identity/application/ports/identity-adapters.ts'
-import { ConsentPolicy } from '../app/modules/identity/application/consent-policy.ts'
-import { OtpRequests } from '../app/modules/identity/application/otp-requests.ts'
-import { OtpVerification } from '../app/modules/identity/application/otp-verification.ts'
-import { PlayerProfiles } from '../app/modules/identity/application/player-profiles.ts'
-import { OperationalEmails } from '../app/modules/identity/application/operational-emails.ts'
-import { IdentitySessions } from '../app/modules/identity/application/identity-sessions.ts'
+import { ConsentPolicy } from '../app/modules/identity/domain/consent-policy.ts'
+import { OtpRequestService } from '../app/modules/identity/application/services/otp-request-service.ts'
+import { OtpConsumptionService } from '../app/modules/identity/application/services/otp-consumption-service.ts'
+import { ProfileReader } from '../app/modules/identity/application/services/profile-reader.ts'
+import { ProfileUpdateService } from '../app/modules/identity/application/services/profile-update-service.ts'
+import { PhoneChangeService } from '../app/modules/identity/application/services/phone-change-service.ts'
+import { RequestSignInCodeUseCase } from '../app/modules/identity/application/use-cases/request-sign-in-code-use-case.ts'
+import { ReadOtpDeliveryStatusUseCase } from '../app/modules/identity/application/use-cases/read-otp-delivery-status-use-case.ts'
+import { VerifySignInCodeUseCase } from '../app/modules/identity/application/use-cases/verify-sign-in-code-use-case.ts'
+import { RevokeIdentitySessionUseCase } from '../app/modules/identity/application/use-cases/revoke-identity-session-use-case.ts'
+import { DispatchPendingOtpEmailsUseCase } from '../app/modules/identity/application/use-cases/dispatch-pending-otp-emails-use-case.ts'
+import { DeliverOtpEmailUseCase } from '../app/modules/identity/application/use-cases/deliver-otp-email-use-case.ts'
+import { ReadOnboardingProfileUseCase } from '../app/modules/identity/application/use-cases/read-onboarding-profile-use-case.ts'
+import { UpdateOnboardingProfileUseCase } from '../app/modules/identity/application/use-cases/update-onboarding-profile-use-case.ts'
+import { ConfirmOnboardingPhoneUseCase } from '../app/modules/identity/application/use-cases/confirm-onboarding-phone-use-case.ts'
+import { CancelOnboardingPhoneUseCase } from '../app/modules/identity/application/use-cases/cancel-onboarding-phone-use-case.ts'
+import { ReadPlayerProfileUseCase } from '../app/modules/identity/application/use-cases/read-player-profile-use-case.ts'
+import { UpdatePlayerProfileUseCase } from '../app/modules/identity/application/use-cases/update-player-profile-use-case.ts'
+import { ConfirmPlayerPhoneUseCase } from '../app/modules/identity/application/use-cases/confirm-player-phone-use-case.ts'
+import { CancelPlayerPhoneUseCase } from '../app/modules/identity/application/use-cases/cancel-player-phone-use-case.ts'
 import { PostgresIdentityUnitOfWork } from '../app/modules/identity/infrastructure/postgres/unit-of-work.ts'
 import { PostgresIdentityQueries } from '../app/modules/identity/infrastructure/postgres/identity-queries.ts'
 import { PostgresIdentityRetention } from '../app/modules/identity/infrastructure/postgres/identity-retention.ts'
@@ -25,7 +39,8 @@ import { AdonisIdentitySecrets } from '../app/modules/identity/infrastructure/ad
 import { AdonisOtpMailTransport } from '../app/modules/identity/infrastructure/adonis/otp-mail-transport.ts'
 import { AdonisOtpDeliveryQueue } from '../app/modules/identity/infrastructure/adonis/otp-delivery-queue.ts'
 import { TournamentRepository } from '../app/modules/tournaments/application/tournament-repository.ts'
-import { PublicTournamentCatalog } from '../app/modules/tournaments/application/public-tournament-catalog.ts'
+import { ListPublicTournamentsUseCase } from '../app/modules/tournaments/application/use-cases/list-public-tournaments-use-case.ts'
+import { FindPublicTournamentUseCase } from '../app/modules/tournaments/application/use-cases/find-public-tournament-use-case.ts'
 import { PostgresTournamentRepository } from '../app/modules/tournaments/infrastructure/postgres/tournament-repository.ts'
 
 /** Composition root: application contracts are bound to infrastructure here. */
@@ -48,52 +63,145 @@ export default class ModuleBindingsProvider {
       async (resolver) => new AdonisIdentitySession(await resolver.make(HttpContext))
     )
     container.bind(
-      OtpRequests,
+      OtpRequestService,
+      async (resolver) => new OtpRequestService(await resolver.make(IdentitySecrets))
+    )
+    container.bind(
+      OtpConsumptionService,
+      async (resolver) => new OtpConsumptionService(await resolver.make(IdentitySecrets))
+    )
+    container.bind(
+      ProfileReader,
+      async (resolver) => new ProfileReader(await resolver.make(IdentityQueries))
+    )
+    container.bind(
+      ProfileUpdateService,
       async (resolver) =>
-        new OtpRequests(
+        new ProfileUpdateService(
+          await resolver.make(IdentitySecrets),
+          await resolver.make(OtpRequestService)
+        )
+    )
+    container.bind(
+      PhoneChangeService,
+      async (resolver) =>
+        new PhoneChangeService(
+          await resolver.make(OtpConsumptionService),
+          await resolver.make(IdentitySecrets)
+        )
+    )
+    container.bind(
+      RequestSignInCodeUseCase,
+      async (resolver) =>
+        new RequestSignInCodeUseCase(
           await resolver.make(IdentityUnitOfWork),
+          await resolver.make(OtpRequestService)
+        )
+    )
+    container.bind(
+      ReadOtpDeliveryStatusUseCase,
+      async (resolver) =>
+        new ReadOtpDeliveryStatusUseCase(
           await resolver.make(IdentityQueries),
           await resolver.make(IdentitySecrets)
         )
     )
-    // Resolve policy on each use case, including test and future consent adapters.
     container.bind(
-      OtpVerification,
+      VerifySignInCodeUseCase,
       async (resolver) =>
-        new OtpVerification(
+        new VerifySignInCodeUseCase(
           await resolver.make(IdentityUnitOfWork),
           await resolver.make(IdentitySecrets),
-          await resolver.make(ConsentPolicy)
+          await resolver.make(ConsentPolicy),
+          await resolver.make(IdentitySession),
+          await resolver.make(OtpConsumptionService)
         )
     )
     container.bind(
-      PlayerProfiles,
-      async (resolver) =>
-        new PlayerProfiles(
-          await resolver.make(IdentityUnitOfWork),
-          await resolver.make(IdentityQueries),
-          await resolver.make(IdentitySecrets),
-          await resolver.make(OtpRequests)
-        )
+      RevokeIdentitySessionUseCase,
+      async (resolver) => new RevokeIdentitySessionUseCase(await resolver.make(IdentityUnitOfWork))
     )
     container.bind(
-      OperationalEmails,
+      DispatchPendingOtpEmailsUseCase,
       async (resolver) =>
-        new OperationalEmails(
-          await resolver.make(IdentityUnitOfWork),
+        new DispatchPendingOtpEmailsUseCase(
           await resolver.make(IdentityQueries),
           await resolver.make(IdentityRetentionRepository),
-          await resolver.make(OtpMailTransport),
           await resolver.make(OtpDeliveryQueue)
         )
     )
     container.bind(
-      IdentitySessions,
-      async (resolver) => new IdentitySessions(await resolver.make(IdentityUnitOfWork))
+      DeliverOtpEmailUseCase,
+      async (resolver) =>
+        new DeliverOtpEmailUseCase(
+          await resolver.make(IdentityUnitOfWork),
+          await resolver.make(OtpMailTransport)
+        )
     )
     container.bind(
-      PublicTournamentCatalog,
-      async (resolver) => new PublicTournamentCatalog(await resolver.make(TournamentRepository))
+      ReadOnboardingProfileUseCase,
+      async (resolver) => new ReadOnboardingProfileUseCase(await resolver.make(ProfileReader))
+    )
+    container.bind(
+      UpdateOnboardingProfileUseCase,
+      async (resolver) =>
+        new UpdateOnboardingProfileUseCase(
+          await resolver.make(IdentityUnitOfWork),
+          await resolver.make(ProfileUpdateService)
+        )
+    )
+    container.bind(
+      ConfirmOnboardingPhoneUseCase,
+      async (resolver) =>
+        new ConfirmOnboardingPhoneUseCase(
+          await resolver.make(IdentityUnitOfWork),
+          await resolver.make(PhoneChangeService)
+        )
+    )
+    container.bind(
+      CancelOnboardingPhoneUseCase,
+      async (resolver) =>
+        new CancelOnboardingPhoneUseCase(
+          await resolver.make(IdentityUnitOfWork),
+          await resolver.make(PhoneChangeService)
+        )
+    )
+    container.bind(
+      ReadPlayerProfileUseCase,
+      async (resolver) => new ReadPlayerProfileUseCase(await resolver.make(ProfileReader))
+    )
+    container.bind(
+      UpdatePlayerProfileUseCase,
+      async (resolver) =>
+        new UpdatePlayerProfileUseCase(
+          await resolver.make(IdentityUnitOfWork),
+          await resolver.make(ProfileUpdateService)
+        )
+    )
+    container.bind(
+      ConfirmPlayerPhoneUseCase,
+      async (resolver) =>
+        new ConfirmPlayerPhoneUseCase(
+          await resolver.make(IdentityUnitOfWork),
+          await resolver.make(PhoneChangeService)
+        )
+    )
+    container.bind(
+      CancelPlayerPhoneUseCase,
+      async (resolver) =>
+        new CancelPlayerPhoneUseCase(
+          await resolver.make(IdentityUnitOfWork),
+          await resolver.make(PhoneChangeService)
+        )
+    )
+    container.bind(
+      ListPublicTournamentsUseCase,
+      async (resolver) =>
+        new ListPublicTournamentsUseCase(await resolver.make(TournamentRepository))
+    )
+    container.bind(
+      FindPublicTournamentUseCase,
+      async (resolver) => new FindPublicTournamentUseCase(await resolver.make(TournamentRepository))
     )
   }
 }

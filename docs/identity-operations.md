@@ -41,3 +41,5 @@ Delivery material is encrypted while pending and removed after delivery or termi
 Japa covers pure identity rules, real HTTP/PostgreSQL behavior and concurrency, the mail boundary, and Chromium player flows. The full gate requires 100% per-file statements, branches, functions, and lines in Node and the browser, together with meaningful authorization assertions.
 
 Framework configuration and CLI wiring, migrations/maintenance files, generated code, disabled SSR, and type-only files are excluded from application coverage. The outbox command is framework CLI wiring; the dispatcher, delivery, retention, identity adapters, controllers, and frontend behavior remain covered application source.
+
+`app/modules/identity/application/identity-input.ts` is explicitly excluded from Node coverage because it contains only erased TypeScript input aliases and type imports. Every executable use case, shared application service, and domain policy remains included in the per-file 100% gate.

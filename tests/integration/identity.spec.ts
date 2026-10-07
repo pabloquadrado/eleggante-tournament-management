@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { signedInBrowser } from '../support/identity-fixtures.ts'
 import { deliveredCode } from '../support/identity-fixtures.ts'
 import app from '@adonisjs/core/services/app'
-import { ConsentPolicy } from '../../app/modules/identity/application/consent-policy.ts'
+import { ConsentPolicy } from '../../app/modules/identity/domain/consent-policy.ts'
 
 test.group('Email sign-in', (group) => {
   group.each.setup(() => testUtils.db().truncate())

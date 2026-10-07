@@ -46,6 +46,9 @@ export default class HttpExceptionHandler extends ExceptionHandler {
     }
 
     if (error instanceof IdentityError) {
+      if (['/onboarding', '/me'].includes(ctx.request.url()))
+        return ctx.response.redirect(error.status === 401 ? '/sign-in' : '/onboarding')
+
       return ctx.response.status(error.status).send({ errors: { [error.field]: error.message } })
     }
 

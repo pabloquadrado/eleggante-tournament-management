@@ -6,7 +6,7 @@ import { captureBrowserCoverage } from '../support/browser-coverage.ts'
 import type { FakeMailer } from '@adonisjs/mail'
 import db from '@adonisjs/lucid/services/db'
 import app from '@adonisjs/core/services/app'
-import { ConsentPolicy } from '../../app/modules/identity/application/consent-policy.ts'
+import { ConsentPolicy } from '../../app/modules/identity/domain/consent-policy.ts'
 import type { Page, Route } from 'playwright'
 
 test.group('Player email sign-in', (group) => {
