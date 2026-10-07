@@ -17,12 +17,17 @@ export async function identityRequest<Result>(
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
+
     if (response.status === 204) return undefined as Result
+
     const result = await response.json()
+
     if (!response.ok) throw new IdentityHttpError(Object.values(result.errors).join(' '))
+
     return result
   } catch (error) {
     if (error instanceof IdentityHttpError) throw error
+
     throw new IdentityHttpError('Não foi possível conectar. Tente novamente.')
   }
 }

@@ -21,23 +21,30 @@ export default class IdentityController {
 
   async signIn({ inertia, response }: HttpContext) {
     response.header('cache-control', 'no-store')
+
     return inertia.render('identity/sign-in', { pending: null })
   }
 
   async codePage({ session, inertia, response }: HttpContext) {
     response.header('cache-control', 'no-store')
     const pending = session.get('pendingOtp')
+
     if (!pending) return response.redirect('/sign-in')
+
     return inertia.render('identity/sign-in', { pending })
   }
 
   async profilePage(context: HttpContext) {
     if (!(await context.auth.check()) || context.auth.user!.status !== 'active')
       return context.response.redirect('/sign-in')
+
     const access = context.session.get('identityAccess') === 'player' ? 'player' : 'onboarding'
+
     if (context.request.url() === '/me' && access !== 'player')
       return context.response.redirect('/onboarding')
+
     context.response.header('cache-control', 'no-store')
+
     return context.inertia.render('identity/profile', {
       profile: await this.profiles.read(context.auth.user!.id),
       access,
@@ -48,6 +55,7 @@ export default class IdentityController {
     await this.sessions.revoke(session.sessionId)
     session.clear()
     session.regenerate()
+
     return response.noContent()
   }
 
@@ -60,26 +68,33 @@ export default class IdentityController {
       this.identitySession,
       request.id()!
     )
+
     return { ...result, next: result.access === 'player' ? '/me' : '/onboarding' }
   }
 
   private async actor({ auth }: HttpContext) {
     if (!(await auth.check()) || auth.user!.status !== 'active')
       throw new IdentityError('Entre para continuar.', 401)
+
     return auth.user!
   }
 
   async onboardingProfile(context: HttpContext) {
     const user = await this.actor(context)
+
     context.response.header('cache-control', 'no-store')
+
     return { data: await this.profiles.read(user.id) }
   }
 
   async profile(context: HttpContext) {
     const user = await this.actor(context)
+
     if (context.session.get('identityAccess') !== 'player')
       throw new IdentityError('Conclua seu perfil e aceite os documentos para continuar.', 403)
+
     context.response.header('cache-control', 'no-store')
+
     return { data: await this.profiles.read(user.id) }
   }
 
@@ -95,11 +110,13 @@ export default class IdentityController {
         requestId: context.request.id()!,
       }
     )
+
     return context.response.status('phoneVerificationRequired' in result ? 202 : 200).send(result)
   }
 
   async confirmOnboardingPhone(context: HttpContext) {
     const user = await this.actor(context)
+
     return this.verification.confirmPhone(
       context.request.input('challengeId'),
       context.request.input('code'),
@@ -111,31 +128,37 @@ export default class IdentityController {
 
   async confirmPhone(context: HttpContext) {
     await this.profile(context)
+
     return this.confirmOnboardingPhone(context)
   }
 
   async cancelOnboardingPhone(context: HttpContext) {
     const user = await this.actor(context)
+
     await this.requests.cancelPhone(
       context.request.input('challengeId'),
       context.session.sessionId,
       user.id
     )
+
     return context.response.noContent()
   }
 
   async cancelPhone(context: HttpContext) {
     await this.profile(context)
+
     return this.cancelOnboardingPhone(context)
   }
 
   async updateProfile(context: HttpContext) {
     await this.profile(context)
+
     return this.updateOnboardingProfile(context)
   }
 
   async status({ params, session, response }: HttpContext) {
     response.header('cache-control', 'no-store')
+
     return this.requests.status(params.id, session.sessionId)
   }
 
@@ -148,7 +171,9 @@ export default class IdentityController {
       request.header('idempotency-key'),
       request.id()!
     )
+
     session.put('pendingOtp', { ...result, email: email.value })
+
     return response.accepted(result)
   }
 }

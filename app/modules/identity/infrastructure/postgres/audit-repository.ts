@@ -8,6 +8,7 @@ export class PostgresAuditRepository implements IdentityAuditRepository {
 
   async append(event: IdentityAuditEvent) {
     const now = new Date()
+
     await this.client.table('audit_events').insert({
       id: randomUUID(),
       actor_user_id: event.actorUserId,

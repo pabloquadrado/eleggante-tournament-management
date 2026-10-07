@@ -16,6 +16,7 @@ export class PostgresIdentityUnitOfWork extends IdentityUnitOfWork {
   async write<T>(operation: (repositories: IdentityRepositories) => Promise<T>): Promise<T> {
     return db.transaction(async (transaction) => {
       await lockIdentityWrites(transaction)
+
       return operation({
         players: new PostgresPlayerRepository(transaction),
         challenges: new PostgresChallengeRepository(transaction),

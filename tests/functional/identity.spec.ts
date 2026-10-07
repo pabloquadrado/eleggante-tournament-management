@@ -11,9 +11,11 @@ import type { Page, Route } from 'playwright'
 
 test.group('Player email sign-in', (group) => {
   let fake: FakeMailer
+
   group.each.setup(() => testUtils.db().truncate())
   group.each.setup(() => {
     fake = mail.fake()
+
     return () => mail.restore()
   })
 
@@ -38,6 +40,7 @@ test.group('Player email sign-in', (group) => {
     assert,
   }) => {
     const page = await visit('/sign-in')
+
     await page.getByRole('heading', { name: 'Entrar na Arena Eleggante' }).waitFor()
     await page.getByLabel('E-mail').fill('player@example.com')
     await page.getByRole('button', { name: 'Enviar código' }).click()
@@ -45,6 +48,7 @@ test.group('Player email sign-in', (group) => {
     await new DispatchOtpOutboxJob().execute()
     await captureBrowserCoverage(page, 'email-request')
     const code = String(fake.messages.sent()[0].toJSON().message.text).match(/\b\d{6}\b/)![0]
+
     await page.getByLabel('Código de acesso').fill(code)
     await page.getByRole('button', { name: 'Verificar código' }).click()
     await page.getByRole('heading', { name: 'Complete seu perfil' }).waitFor()
@@ -53,6 +57,7 @@ test.group('Player email sign-in', (group) => {
     await page.getByLabel('Nome de exibição').fill('Pablo')
     await page.getByLabel('Nome de usuário').fill('pablo.fc')
     const phone = page.getByLabel('Celular com DDD')
+
     assert.equal(await phone.inputValue(), '')
     assert.equal(await phone.getAttribute('placeholder'), '+55 (00) 00000-0000')
     await phone.pressSequentially('51abc99900963312345')
@@ -61,6 +66,7 @@ test.group('Player email sign-in', (group) => {
     assert.equal(await phone.inputValue(), '+55 (51) 99900-963')
     await phone.press('3')
     assert.equal(await phone.inputValue(), '+55 (51) 99900-9633')
+
     for (const [input, expected] of [
       ['', ''],
       ['abc+', ''],
@@ -79,6 +85,7 @@ test.group('Player email sign-in', (group) => {
       await phone.fill(input)
       assert.equal(await phone.inputValue(), expected)
     }
+
     await page.getByRole('button', { name: 'Salvar perfil' }).click()
     await page.getByText('Perfil salvo.').waitFor()
     await page.getByText('Aceite dos documentos pendente').waitFor()
@@ -91,6 +98,7 @@ test.group('Player email sign-in', (group) => {
     const phoneCode = String(fake.messages.sent().at(-1)!.toJSON().message.text).match(
       /\b\d{6}\b/
     )![0]
+
     await db
       .from('otp_challenges')
       .where('purpose', 'phone_change')
@@ -130,6 +138,7 @@ test.group('Player email sign-in', (group) => {
     assert,
   }) => {
     const page = await visit('/sign-in')
+
     await page.clock.install()
     await page.getByLabel('E-mail').fill('bad-email')
     await page.getByLabel('E-mail').press('Enter')
@@ -141,6 +150,7 @@ test.group('Player email sign-in', (group) => {
     await page.unroute('**/api/v1/auth/otp/request')
     await enterEmail(page)
     const wrong = lastCode() === '000000' ? '111111' : '000000'
+
     await page.getByLabel('Código de acesso').fill(wrong)
     await page.getByLabel('Código de acesso').press('Enter')
     await page.getByText('Código inválido ou expirado. Solicite um novo código.').waitFor()
@@ -168,8 +178,10 @@ test.group('Player email sign-in', (group) => {
         reply.request().method() === 'POST' &&
         new URL(reply.url()).pathname === '/api/v1/auth/otp/request'
     )
+
     await page.getByRole('button', { name: 'Reenviar código' }).click()
     const resent = await resend
+
     assert.equal(resent.status(), 202)
     fake.transport.send = async () => {
       throw Object.assign(new Error('Private SMTP failure'), { responseCode: 550 })
@@ -193,6 +205,7 @@ test.group('Player email sign-in', (group) => {
     cleanup,
   }) => {
     const page = await visit('/sign-in')
+
     await enterEmail(page)
     await verifyEmail(page)
     await page.getByLabel('Nome de exibição').fill('Private Player')
@@ -238,8 +251,10 @@ test.group('Player email sign-in', (group) => {
       (reply) =>
         reply.request().method() === 'PATCH' && new URL(reply.url()).pathname === '/api/v1/me'
     )
+
     await page.getByRole('button', { name: 'Solicitar novo código' }).click()
     const resent = await resend
+
     assert.equal(resent.status(), 202)
     await new DispatchOtpOutboxJob().execute()
     fake.messages.assertSentCount(deliveredBeforeResend + 1)
@@ -250,6 +265,7 @@ test.group('Player email sign-in', (group) => {
     await captureBrowserCoverage(page, 'eligible-phone')
     await page.goto('/tournaments')
     const publicText = await page.locator('body').innerText()
+
     for (const privateValue of [
       'player@example.com',
       'Private Player',
@@ -257,6 +273,7 @@ test.group('Player email sign-in', (group) => {
       '+5551999009634',
     ])
       assert.notInclude(publicText, privateValue)
+
     await captureBrowserCoverage(page, 'identity-public-privacy')
   })
 
@@ -266,6 +283,7 @@ test.group('Player email sign-in', (group) => {
       assert,
     }) => {
       const page = await visit('/sign-in')
+
       await page.clock.install()
       await page.getByLabel('E-mail').waitFor()
       await page.context().clearCookies({ name: 'XSRF-TOKEN' })
@@ -292,6 +310,7 @@ test.group('Player email sign-in', (group) => {
       const requested = new Promise<void>((resolve) => {
         notify = resolve
       })
+
       await page.route('**/api/v1/auth/otp/*', (route) => {
         held = route
         notify()
@@ -310,11 +329,13 @@ test.group('Player email sign-in', (group) => {
               predicate: (request) =>
                 request.method() === 'GET' && request.url().includes('/api/v1/auth/otp/'),
             })
+
       if (lateStatus === 'success') {
         await held.fulfill({ status: 200, json: { message: 'Late delivery status' } })
       } else {
         await held.abort()
       }
+
       await response
       await page.evaluate('new Promise(resolve => requestAnimationFrame(resolve))')
       assert.equal(await page.getByText('Late delivery status').count(), 0)

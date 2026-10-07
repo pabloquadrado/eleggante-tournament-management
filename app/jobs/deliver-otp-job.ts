@@ -5,6 +5,7 @@ import { OperationalEmails } from '../modules/identity/application/operational-e
 export default class DeliverOtpJob extends Job<{ outboxId: string }> {
   async execute() {
     const emails = await app.container.make(OperationalEmails)
+
     await emails.deliver(this.payload.outboxId)
   }
 }

@@ -9,6 +9,7 @@ export default class LocalPublicTournamentsSeeder extends BaseSeeder {
 
   async run() {
     const now = new Date().toISOString()
+
     await this.client
       .table('organizations')
       .insert({

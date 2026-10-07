@@ -23,6 +23,7 @@ export class PostgresIdentityRetention extends IdentityRetentionRepository {
             .orWhereNotNull('consumed_at')
             .orWhereNotNull('invalidated_at')
         })
+
       // Always lock challenges before their outbox rows, as delivery does.
       await transaction.from('otp_challenges').whereIn('id', terminal.clone()).update({
         email_encrypted: null,
@@ -41,6 +42,7 @@ export class PostgresIdentityRetention extends IdentityRetentionRepository {
         .from('otp_challenges')
         .select('id')
         .where('expires_at', '<=', replayCutoff)
+
       await transaction.from('notification_outbox').whereIn('challenge_id', old.clone()).delete()
       await transaction.from('otp_challenges').whereIn('id', old).delete()
     })

@@ -14,10 +14,12 @@ test.group('Private identity audit', (group) => {
     cleanup,
   }) => {
     const fake = mail.fake()
+
     cleanup(() => mail.restore())
     const browser = await new IdentityBrowser().start()
     const challenge = await deliveredCode(browser, fake, 'audited@example.com')
     const queued = await db.from('audit_events').firstOrFail()
+
     assert.equal(queued.operation, 'notification_queued')
     assert.isNull(queued.actor_user_id)
     assert.isNull(queued.entity_id)
@@ -26,6 +28,7 @@ test.group('Private identity audit', (group) => {
     assert.match(queued.stable_references.outboxId, /^[a-f0-9-]{36}$/)
     assert.match(queued.request_id, /^[a-f0-9-]{36}$/)
     const verified = await browser.request('/api/v1/auth/otp/verify', 'POST', challenge)
+
     assert.equal(verified.status, 200)
     const saved = await browser.request(
       '/api/v1/onboarding/profile',
@@ -38,16 +41,20 @@ test.group('Private identity audit', (group) => {
       },
       randomUUID()
     )
+
     assert.equal(saved.status, 200)
     const events = await db.from('audit_events').orderBy('created_at')
+
     assert.deepEqual(
       events.map((event) => event.operation),
       ['notification_queued', 'created', 'updated']
     )
     assert.equal(events[1].entity_id, events[2].entity_id)
     assert.equal(events[2].entity_version, 2)
+
     for (const event of events) {
       assert.deepEqual(event.updated_at, event.created_at)
+
       for (const value of [
         'audited@example.com',
         'Private Player',
@@ -57,6 +64,7 @@ test.group('Private identity audit', (group) => {
         assert.notInclude(JSON.stringify(event), value)
       }
     }
+
     await assert.rejects(async () => {
       await db.from('audit_events').update({ operation: 'updated' })
     })
@@ -64,8 +72,10 @@ test.group('Private identity audit', (group) => {
       await db.from('audit_events').delete()
     })
     const retained = await db.from('audit_events')
+
     assert.lengthOf(retained, 3)
     const publicResponse = await browser.request('/api/v1/audit')
+
     assert.equal(publicResponse.status, 404)
   })
 })

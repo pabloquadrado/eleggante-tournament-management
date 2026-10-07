@@ -16,11 +16,14 @@ export class PostgresIdentityQueries extends IdentityQueries {
       .where('id', challengeId)
       .where('browser_key', browserKey)
       .first()
+
     if (!challenge) return null
+
     const delivery = await db
       .from('notification_outbox')
       .where('challenge_id', challengeId)
       .firstOrFail()
+
     return delivery.delivery_state === 'failed' ? 'failed' : 'pending'
   }
 
@@ -30,6 +33,7 @@ export class PostgresIdentityQueries extends IdentityQueries {
       .select('id')
       .where('delivery_state', 'pending')
       .where('next_attempt_at', '<=', now)
+
     return rows.map((row) => row.id)
   }
 }

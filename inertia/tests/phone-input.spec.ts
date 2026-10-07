@@ -20,9 +20,14 @@ test('the phone input displays the Brazilian mobile mask for partial, typed, and
   ]) {
     assert.equal(maskPhoneInput(input), expected)
   }
+
   let typed = '+55'
+
   for (const digit of '51999009633') typed = maskPhoneInput(typed + digit)
+
   assert.equal(typed, '+55 (51) 99900-9633')
+
   for (let remaining = 11; remaining > 0; remaining--) typed = maskPhoneInput(typed.slice(0, -1))
+
   assert.equal(typed, '')
 })

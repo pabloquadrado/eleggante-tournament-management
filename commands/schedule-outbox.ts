@@ -8,6 +8,7 @@ export default class ScheduleOutbox extends BaseCommand {
 
   async run() {
     const { default: DispatchOtpOutboxJob } = await import('../app/jobs/dispatch-otp-outbox-job.ts')
+
     await DispatchOtpOutboxJob.schedule({}).id('otp-outbox-recovery').every('5s')
   }
 }

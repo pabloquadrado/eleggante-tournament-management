@@ -34,8 +34,11 @@ export class OtpVerification {
       'sign_in',
       async (challenge, { players, sessions, audit }) => {
         if (!challenge.email) return null
+
         const { player, created } = await players.resolveEmail(challenge.email, this.secrets.id())
+
         if (player.status !== 'active') return null
+
         if (created)
           await audit.append({
             actorUserId: player.id,
@@ -45,12 +48,17 @@ export class OtpVerification {
             requestId,
             references: { challengeId: challenge.id },
           })
+
         const access = identityAccessFor(player, await this.consent.hasCurrentAcceptance(player.id))
+
         await session.establish(player.id, access, sessions)
+
         return { access }
       }
     )
+
     session.activate()
+
     return result
   }
 
@@ -68,15 +76,21 @@ export class OtpVerification {
       'phone_change',
       async (challenge, { players, audit }) => {
         if (challenge.userId !== userId) return null
+
         const intent = challenge.intent
+
         if (!intent || intent.userId !== userId) return null
+
         const player = await players.lock(userId)
+
         if (player.status !== 'active') return null
+
         if (player.version !== intent.version)
           throw new IdentityError(
             'Seu perfil foi alterado. Atualize a página antes de salvar.',
             409
           )
+
         await players.save(
           userId,
           { name: intent.name, username: intent.username, phone: intent.phone },
@@ -91,6 +105,7 @@ export class OtpVerification {
           requestId,
           references: { challengeId: challenge.id },
         })
+
         return { data: playerProfile(await players.find(userId)) }
       }
     )
@@ -104,6 +119,7 @@ export class OtpVerification {
     action: (challenge: OtpChallenge, repositories: IdentityRepositories) => Promise<Result | null>
   ) {
     if (!isIdentifier(id) || typeof code !== 'string') throw denied()
+
     const result = await this.work.write(async (repositories) => {
       const { challenges } = repositories
       const challenge = await challenges.forBrowser(
@@ -112,6 +128,7 @@ export class OtpVerification {
         purpose
       )
       const now = new Date()
+
       if (
         !challenge ||
         challenge.invalidatedAt ||
@@ -120,18 +137,27 @@ export class OtpVerification {
         challenge.attempts >= otpPolicy.maxAttempts
       )
         return null
+
       const matches =
         /^\d{6}$/.test(code) && this.secrets.matchesCode(id, code, challenge.codeHash!)
+
       if (!matches) {
         await challenges.recordFailure(id, challenge.attempts + 1, now)
+
         return null
       }
+
       const outcome = await action(challenge, repositories)
+
       if (!outcome) return null
+
       await challenges.consume(id, now)
+
       return outcome
     })
+
     if (!result) throw denied()
+
     return result
   }
 }

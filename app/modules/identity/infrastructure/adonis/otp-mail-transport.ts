@@ -17,6 +17,7 @@ export class AdonisOtpMailTransport extends OtpMailTransport {
           )
           .header('Message-ID', `<${id}@arena-eleggante>`)
       })
+
       return 'sent'
     } catch (error) {
       return typeof error === 'object' &&

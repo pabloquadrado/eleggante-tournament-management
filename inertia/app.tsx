@@ -12,6 +12,7 @@ createInertiaApp({
       `./pages/${name}.tsx`,
       import.meta.glob<{ default: ResolvedComponent }>('./pages/**/*.tsx')
     )
+
     return page.default
   },
   setup({ el, App, props }) {

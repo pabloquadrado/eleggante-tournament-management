@@ -12,9 +12,13 @@ const coveragePlugin: Plugin = {
   transform(code, id) {
     const file = id.split('?')[0]
     const source = relative(process.cwd(), file)
+
     if (!source.startsWith('inertia/')) return
+
     if (!/\.(ts|tsx)$/.test(source)) return
+
     if (source === 'inertia/ssr.tsx' || source === 'inertia/types.ts') return
+
     if (source.startsWith('inertia/tests/')) return
 
     const instrumenter = createInstrumenter({
@@ -26,6 +30,7 @@ const coveragePlugin: Plugin = {
     })
     const instrumentedCode = instrumenter.instrumentSync(code, file)
     const sourceMap = instrumenter.lastSourceMap()
+
     return { code: instrumentedCode, map: { ...sourceMap, version: 3 } }
   },
 }

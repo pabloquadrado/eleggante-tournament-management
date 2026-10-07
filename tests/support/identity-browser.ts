@@ -20,16 +20,20 @@ export class IdentityBrowser {
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
+
     for (const header of response.headers.getSetCookie()) {
       const [pair] = header.split(';')
       const separator = pair.indexOf('=')
+
       this.cookies.set(pair.slice(0, separator), pair.slice(separator + 1))
     }
+
     return response
   }
 
   async start() {
     await this.request('/api/v1/tournaments')
+
     return this
   }
 }

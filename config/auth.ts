@@ -11,6 +11,7 @@ const authConfig = defineConfig({
     }),
   },
 })
+
 export default authConfig
 
 declare module '@adonisjs/auth/types' {

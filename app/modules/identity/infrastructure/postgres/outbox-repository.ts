@@ -28,6 +28,7 @@ export class PostgresOutboxRepository implements NotificationOutboxRepository {
 
   async find(id: string) {
     const row = await this.client.from('notification_outbox').where('id', id).first()
+
     return row ? deliveryRecord(row) : null
   }
 

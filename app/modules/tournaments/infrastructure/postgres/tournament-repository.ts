@@ -67,11 +67,13 @@ export class PostgresTournamentRepository extends TournamentRepository {
     const rows = (await query()
       .whereIn('tournament.state', [...states])
       .orderBy('tournament.created_at', 'desc')) as TournamentRow[]
+
     return rows.map(project)
   }
 
   async find(id: string): Promise<TournamentOverview | null> {
     const row = (await query().where('tournament.id', id).first()) as TournamentRow | undefined
+
     return row ? project(row) : null
   }
 }

@@ -11,6 +11,7 @@ export default function render(page: any) {
         `./pages/${name}.tsx`,
         import.meta.glob<{ default: ResolvedComponent }>('./pages/**/*.tsx', { eager: true })
       )
+
       return resolvedPage.default
     },
     setup: ({ App, props }) => <App {...props} />,

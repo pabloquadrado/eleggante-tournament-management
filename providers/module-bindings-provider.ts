@@ -34,6 +34,7 @@ export default class ModuleBindingsProvider {
 
   register() {
     const container = this.app.container
+
     container.singleton(IdentityUnitOfWork, () => new PostgresIdentityUnitOfWork())
     container.singleton(IdentityQueries, () => new PostgresIdentityQueries())
     container.singleton(IdentityRetentionRepository, () => new PostgresIdentityRetention())

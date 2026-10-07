@@ -11,10 +11,13 @@ export default class PublicTournamentsController {
 
   async show({ inertia, params, response }: HttpContext) {
     const tournament = await this.catalog.find(params.id)
+
     if (!tournament) {
       response.status(404)
+
       return inertia.render('errors/not-found', {})
     }
+
     return inertia.render('tournaments/show', { tournament })
   }
 
@@ -24,6 +27,7 @@ export default class PublicTournamentsController {
 
   async apiShow({ params, response }: HttpContext) {
     const tournament = await this.catalog.find(params.id)
+
     return tournament
       ? response.ok({ data: tournament })
       : response.notFound({ error: 'Torneio não encontrado.' })

@@ -5,6 +5,7 @@ import { OperationalEmails } from '../modules/identity/application/operational-e
 export default class DispatchOtpOutboxJob extends Job {
   async execute() {
     const emails = await app.container.make(OperationalEmails)
+
     await emails.dispatchPending()
   }
 }

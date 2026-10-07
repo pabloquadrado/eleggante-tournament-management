@@ -18,6 +18,7 @@ export default function SignIn({
   async function send(event: FormEvent) {
     event.preventDefault()
     setBusy(true)
+
     try {
       await identityRequest<OtpChallenge>('/api/v1/auth/otp/request', 'POST', { email })
       router.visit('/sign-in/code')
@@ -31,11 +32,13 @@ export default function SignIn({
   async function verify(event: FormEvent) {
     event.preventDefault()
     setBusy(true)
+
     try {
       const result = await identityRequest<{ next: string }>('/api/v1/auth/otp/verify', 'POST', {
         challengeId: pending!.challengeId,
         code,
       })
+
       router.visit(result.next)
     } catch (error) {
       setMessage((error as Error).message)

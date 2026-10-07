@@ -9,6 +9,7 @@ test.group('Visitor tournament pages', (group) => {
 
   test('a visitor sees a helpful empty state', async ({ visit }) => {
     const page = await visit('/tournaments')
+
     await page.getByRole('heading', { name: 'Nenhum torneio disponível no momento' }).waitFor()
     await captureBrowserCoverage(page, 'empty-list')
   })
@@ -18,6 +19,7 @@ test.group('Visitor tournament pages', (group) => {
     await givenTournament('registration_open')
 
     const page = await visit('/tournaments')
+
     await page.getByRole('heading', { name: 'Copa Eleggante' }).waitFor()
     await page.getByText('Inscrições abertas').waitFor()
     await captureBrowserCoverage(page, 'listed-tournament')
@@ -38,10 +40,12 @@ test.group('Visitor tournament pages', (group) => {
     await givenTournament('archived')
 
     const list = await visit('/tournaments')
+
     await list.getByRole('heading', { name: 'Nenhum torneio disponível no momento' }).waitFor()
     await captureBrowserCoverage(list, 'archived-list')
 
     const detail = await visit(`/tournaments/${eventId}`)
+
     await detail.getByText('Arquivado').waitFor()
     await captureBrowserCoverage(detail, 'archived-detail')
   })
@@ -53,6 +57,7 @@ test.group('Visitor tournament pages', (group) => {
     await givenTournament('draft')
 
     const page = await visit(`/tournaments/${eventId}`)
+
     await page.getByRole('heading', { name: 'Página não encontrada' }).waitFor()
     await captureBrowserCoverage(page, 'private-tournament')
 
@@ -71,10 +76,12 @@ test.group('Visitor tournament pages', (group) => {
     })
 
     const list = await visit('/tournaments')
+
     await list.getByText('Online').waitFor()
     await captureBrowserCoverage(list, 'online-list')
 
     const detail = await visit(`/tournaments/${eventId}`)
+
     await detail.getByText('Como participar').waitFor()
     await detail.getByText('Sala privada').waitFor()
     await detail.getByText('11/10/2026').waitFor()
@@ -87,12 +94,14 @@ test.group('Visitor tournament pages', (group) => {
     await db.from('tournaments').where('id', eventId).update({ starts_on: null })
 
     const page = await visit('/tournaments')
+
     await page.getByText('Data a definir').waitFor()
     await captureBrowserCoverage(page, 'undated-tournament')
   })
 
   test('a server error page offers a way back to tournaments', async ({ visit }) => {
     const page = await visit('/__test__/server-error')
+
     await page.getByRole('heading', { name: 'Ocorreu um erro' }).waitFor()
     await page.getByRole('link', { name: 'Ver torneios' }).waitFor()
     await captureBrowserCoverage(page, 'server-error')

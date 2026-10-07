@@ -36,10 +36,12 @@ export default function PlayerProfile({
   async function save(event: FormEvent) {
     event.preventDefault()
     setBusy(true)
+
     try {
       const result = await identityRequest<
         { data: Profile } | (OtpChallenge & { phoneVerificationRequired: true })
       >(endpoint, 'PATCH', { name, username, phone, version: current.version })
+
       if ('phoneVerificationRequired' in result) {
         setChallenge(result)
         setDeliveryMessage('')
@@ -58,11 +60,13 @@ export default function PlayerProfile({
   async function confirm(event: FormEvent) {
     event.preventDefault()
     setBusy(true)
+
     try {
       const result = await identityRequest<{ data: Profile }>(`${endpoint}/phone/verify`, 'POST', {
         challengeId: challenge!.challengeId,
         code,
       })
+
       setCurrent(result.data)
       setChallenge(null)
       setCode('')
@@ -85,6 +89,7 @@ export default function PlayerProfile({
 
   async function cancelPhone() {
     setBusy(true)
+
     try {
       await identityRequest(`${endpoint}/phone/cancel`, 'POST', {
         challengeId: challenge!.challengeId,

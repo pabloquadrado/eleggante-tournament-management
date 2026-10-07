@@ -26,27 +26,38 @@ export class PlayerProfiles {
     context: { browserId: string; ip: string; requestId: string }
   ): Promise<ProfileUpdateResult> {
     const profile = PlayerProfileInput.parse(input)
+
     if (!isIdentifier(key)) throw new IdentityError('Envie uma chave válida para esta solicitação.')
+
     if (!Number.isInteger(input.version) || Number(input.version) < 1)
       throw new IdentityError('Informe a versão atual do perfil.', 422, 'version')
+
     const commandId = this.secrets.key('profile-command', `${id}:${key}`)
     const fingerprint = this.secrets.key(
       'profile-input',
       JSON.stringify({ ...profile, version: input.version })
     )
+
     return this.work.write(async (repositories) => {
       const { players, commands, audit } = repositories
       const player = await players.lock(id)
+
       if (player.status !== 'active') throw new IdentityError('Entre para continuar.', 401)
+
       const replay = await commands.find(commandId)
+
       if (replay) {
         if (replay.fingerprint !== fingerprint)
           throw new IdentityError('Esta solicitação já foi usada para outros dados.', 409)
+
         return replay.response
       }
+
       if (player.version !== input.version)
         throw new IdentityError('Seu perfil foi alterado. Atualize a página antes de salvar.', 409)
+
       const now = new Date()
+
       if (player.phone && player.phone !== profile.phone) {
         const receipt = await this.requests.request(
           EmailAddress.parse(player.email),
@@ -58,11 +69,15 @@ export class PlayerProfiles {
           repositories
         )
         const pending = { ...receipt, phoneVerificationRequired: true as const }
+
         await commands.save(commandId, id, fingerprint, pending, now)
+
         return pending
       }
+
       await players.save(id, profile, player.version + 1, now)
       const saved = { data: playerProfile(await players.find(id)) }
+
       await audit.append({
         actorUserId: id,
         entityId: id,
@@ -72,6 +87,7 @@ export class PlayerProfiles {
         references: {},
       })
       await commands.save(commandId, id, fingerprint, saved, now)
+
       return saved
     })
   }

@@ -25,6 +25,7 @@ export class PostgresRequestLimitRepository implements OtpRequestLimitRepository
       .where('ip_key', ipKey)
       .where('created_at', '>', since)
       .count('* as count')
+
     return { email: Number(email[0].count), ip: Number(ip[0].count) }
   }
 

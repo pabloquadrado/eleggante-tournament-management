@@ -13,8 +13,10 @@ export function useOtpChallenge(
   onStatus: Dispatch<SetStateAction<string>>
 ) {
   const [time, setTime] = useState(() => Date.now())
+
   useEffect(() => {
     if (!challenge) return
+
     let active = true
     const clock = window.setInterval(() => setTime(Date.now()), 1000)
     const poll = window.setInterval(async () => {
@@ -22,11 +24,13 @@ export function useOtpChallenge(
         const result = await identityRequest<{ message: string }>(
           `/api/v1/auth/otp/${challenge.challengeId}`
         )
+
         if (active) onStatus(result.message)
       } catch (error) {
         if (active) onStatus((error as Error).message)
       }
     }, 5000)
+
     return () => {
       active = false
       window.clearInterval(clock)

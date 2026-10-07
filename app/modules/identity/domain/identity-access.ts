@@ -11,5 +11,6 @@ export function identityAccessFor(
   currentConsent: boolean
 ): IdentityAccess {
   if (profile.name && profile.username && profile.phone && currentConsent) return 'player'
+
   return 'onboarding'
 }

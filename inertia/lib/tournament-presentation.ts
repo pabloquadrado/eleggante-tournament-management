@@ -24,5 +24,6 @@ export const stateLabels: Record<TournamentOverview['state'], string> = {
 
 export function formatTournamentDate(value: string | null, fallback: string): string {
   if (!value) return fallback
+
   return dateFormatter.format(new Date(`${value}${utcNoonForCalendarDate}`))
 }

@@ -44,14 +44,17 @@ export default class HttpExceptionHandler extends ExceptionHandler {
         },
       })
     }
+
     if (error instanceof IdentityError) {
       return ctx.response.status(error.status).send({ errors: { [error.field]: error.message } })
     }
+
     if (this.isIdentityRequest(ctx)) {
       return ctx.response.internalServerError({
         errors: { general: 'Não foi possível concluir a solicitação. Tente novamente.' },
       })
     }
+
     return super.handle(error, ctx)
   }
 
@@ -66,8 +69,10 @@ export default class HttpExceptionHandler extends ExceptionHandler {
       if (!(error instanceof IdentityError) && !(error instanceof shieldErrors.E_BAD_CSRF_TOKEN)) {
         ctx.logger.error('Identity request failed; private diagnostics omitted')
       }
+
       return
     }
+
     return super.report(error, ctx)
   }
 }

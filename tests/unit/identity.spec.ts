@@ -33,6 +33,7 @@ test('incomplete profiles, invalid usernames, landlines, and immutable fields ar
   assert,
 }) => {
   const valid = { name: 'Pablo', username: 'pablo', phone: '+5551999009633' }
+
   for (const invalid of [
     { ...valid, name: '' },
     { ...valid, name: null },
@@ -58,8 +59,10 @@ test('email ownership grants player access only with a complete profile and curr
   assert,
 }) => {
   const complete = { name: 'Pablo', username: 'pablo', phone: '+5551999009633' }
+
   assert.equal(identityAccessFor(complete, true), 'player')
   assert.equal(identityAccessFor(complete, false), 'onboarding')
+
   for (const field of ['name', 'username', 'phone']) {
     assert.equal(identityAccessFor({ ...complete, [field]: null }, true), 'onboarding')
   }

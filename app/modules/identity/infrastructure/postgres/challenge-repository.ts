@@ -48,6 +48,7 @@ export class PostgresChallengeRepository implements OtpChallengeRepository {
 
   async replay(requestKey: string) {
     const row = await this.client.from('otp_challenges').where('request_key', requestKey).first()
+
     return row ? challengeRecord(row) : null
   }
 
@@ -57,8 +58,11 @@ export class PostgresChallengeRepository implements OtpChallengeRepository {
       .where('id', id)
       .where('browser_key', browserKey)
       .where('purpose', purpose)
+
     if (userId) query.where('user_id', userId)
+
     const row = await query.forUpdate().first()
+
     return row ? challengeRecord(row) : null
   }
 

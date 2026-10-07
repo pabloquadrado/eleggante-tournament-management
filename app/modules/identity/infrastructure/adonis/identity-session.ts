@@ -22,8 +22,10 @@ export class AdonisIdentitySession extends IdentitySession {
     const original = this.context.session
     const config = (await configProvider.resolve<ResolvedSessionConfig>(app, sessionConfig))!
     const session = new Session(config, config.stores[config.store], emitter, this.context)
+
     await session.initiate(false)
     const oldId = original.sessionId
+
     session.regenerate()
     session.clear()
     // Shield already issued this request's XSRF cookie using the same browser secret.

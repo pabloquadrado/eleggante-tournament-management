@@ -8,6 +8,7 @@ export class PostgresProfileCommandRepository implements ProfileCommandRepositor
 
   async find(id: string) {
     const row = await this.client.from('profile_commands').where('id', id).first()
+
     return row
       ? {
           fingerprint: row.fingerprint,

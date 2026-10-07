@@ -49,6 +49,7 @@ export class PostgresPlayerRepository implements PlayerRepository {
       .ignore()
       .returning('id')
     const row = await this.client.from('users').where('email', email).firstOrFail()
+
     return { player: playerRecord(row), created: inserted.length > 0 }
   }
 
@@ -64,6 +65,7 @@ export class PostgresPlayerRepository implements PlayerRepository {
     } catch (error) {
       if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505')
         throw new IdentityError('Este nome de usuário já está em uso.', 422, 'username')
+
       throw error
     }
   }
