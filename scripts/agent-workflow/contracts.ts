@@ -4,9 +4,9 @@ export const stages = [
   'refinement',
   'plan',
   'implementation',
-  'qa',
   'review-standards',
   'review-spec',
+  'qa',
   'retrospective',
   'ready',
 ] as const
@@ -81,6 +81,7 @@ export type RoleReport = {
   questions: { text: string; stage?: Stage; findingId?: string }[]
   passed: boolean
   qaCheckout?: { path: string; baseCommit: string; commit: string }
+  qaVerification?: string
 }
 export type Question = {
   id: string
@@ -117,9 +118,17 @@ export type Publication = {
   reviewComment?: string
   retrospectiveComment?: string
   pushedCommit?: string
+  draftCommit?: string
   prUrl?: string
   ready?: boolean
   prBodyCommit?: string
+  prBodyDigest?: string
+}
+export type QaIntegration = {
+  path: string
+  baseCommit: string
+  commit: string
+  changedFiles: string[]
 }
 export type RunState = {
   schemaVersion: 1
@@ -133,7 +142,10 @@ export type RunState = {
   branch?: string
   commit: string
   qaCheckout?: { path: string; baseCommit: string }
-  qaIntegration?: { path: string; commit: string; changedFiles: string[] }
+  qaIntegration?: QaIntegration
+  qaIntegrations?: QaIntegration[]
+  qaFailureRound?: number
+  qaAudit?: { report: string; verification: string }
   reports: Partial<Record<Stage, RoleReport>>
   gates: Partial<Record<'engineering' | 'qa', GateEvidence>>
   questions: Question[]
@@ -169,6 +181,11 @@ export type WorkflowPorts = {
       directory: string,
       baseCommit: string
     ): Promise<{ commit: string; clean: boolean; changedFiles: string[] }>
+    qaIntegrated(
+      directory: string,
+      integration: QaIntegration,
+      deliveryCommit: string
+    ): Promise<boolean>
     reviewDiff(
       run: RunState,
       directory: string
@@ -205,6 +222,8 @@ export type NextResult = {
     privateSources?: { locator: string; path: string; digest?: string }[]
     qaCheckout?: { path: string; baseCommit: string }
     qaIntegration?: RunState['qaIntegration']
+    qaVerification?: { path: string; passed: boolean; executionCommit: string }
+    qaAudit?: RunState['qaAudit']
     diff?: { path: string; baseCommit: string; candidateCommit: string; changedFiles: string[] }
     branch?: string
     commit: string

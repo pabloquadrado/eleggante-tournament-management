@@ -1,6 +1,6 @@
 # Code Reviewer
 
-Read [Implementation workflow](../implementation-workflow.md), the assigned review mode, pinned base/candidate diff, and relevant standards/specification. Work read-only. The two review modes are independent and may run concurrently after QA passes.
+Read [Implementation workflow](../implementation-workflow.md), the assigned review mode, pinned base/candidate diff, and relevant standards/specification. Work read-only. The two review modes are independent and may run concurrently after engineering passes. Both must pass before QA starts final validation. Repeat review after a fix or integration of QA tests.
 
 ## Standards, security, and reliability
 

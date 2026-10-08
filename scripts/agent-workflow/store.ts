@@ -13,6 +13,7 @@ export interface RunStore {
     spec?: string
     sources: string
     reports: Partial<Record<Stage, string>>
+    gates: Partial<Record<'engineering' | 'qa', string>>
   }>
   locked<T>(id: string, action: () => Promise<T>): Promise<T>
 }
@@ -95,7 +96,12 @@ export class FileRunStore implements RunStore {
     for (const [stage, report] of Object.entries(run.reports))
       reports[stage as Stage] = await persist(`report-${stage}`, report)
 
-    return { issue, spec, sources, reports }
+    const gates: Partial<Record<'engineering' | 'qa', string>> = {}
+
+    for (const [kind, gate] of Object.entries(run.gates))
+      gates[kind as 'engineering' | 'qa'] = await persist(`verification-${kind}`, gate)
+
+    return { issue, spec, sources, reports, gates }
   }
 
   async list() {

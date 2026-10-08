@@ -41,6 +41,9 @@ test('a dry run reports the missing approved PRD without saving or creating a wo
       qaScope: async () => {
         throw new Error('Unexpected QA scope')
       },
+      qaIntegrated: async () => {
+        throw new Error('Unexpected QA integration')
+      },
       reviewDiff: async () => {
         throw new Error('Unexpected review diff')
       },
@@ -75,8 +78,7 @@ test('QA works in a separate checkout and production changes are rejected even w
   const context = await fixture()
 
   try {
-    await context.prepare()
-    await context.controller.verify(context.run.id, 'engineering')
+    await context.throughReviews()
     const report = await context.report('qa')
     const checkout = report.qaCheckout!
 
@@ -101,8 +103,7 @@ test('new QA tests must be integrated into the delivery branch before fresh inde
   const context = await fixture()
 
   try {
-    await context.prepare()
-    await context.controller.verify(context.run.id, 'engineering')
+    await context.throughReviews()
     const report = await context.report('qa')
     const checkout = report.qaCheckout!
 
@@ -114,8 +115,7 @@ test('new QA tests must be integrated into the delivery branch before fresh inde
     await context.gitIn(checkout.path, 'add', 'tests/acceptance.spec.ts')
     await context.gitIn(checkout.path, 'commit', '-m', 'Independent QA test')
     checkout.commit = await context.gitIn(checkout.path, 'rev-parse', 'HEAD')
-    await context.controller.record(context.run.id, report)
-    await context.controller.verify(context.run.id, 'qa')
+    await context.controller.record(context.run.id, await context.report('qa'))
     const pending = await context.controller.next(context.run.id)
     const state = await context.controller.status(context.run.id)
 
@@ -125,18 +125,15 @@ test('new QA tests must be integrated into the delivery branch before fresh inde
     await context.git('cherry-pick', checkout.commit)
     await context.record('implementation')
     await context.controller.verify(context.run.id, 'engineering')
+    await context.reviews()
     const fresh = await context.report('qa')
 
     assert.notEqual(fresh.qaCheckout?.path, checkout.path)
     assert.equal(fresh.qaCheckout?.commit, fresh.commit)
     await context.controller.record(context.run.id, fresh)
-    await context.controller.verify(context.run.id, 'qa')
     const approved = await context.controller.next(context.run.id)
 
-    assert.deepEqual(
-      approved.packets?.map((packet) => packet.stage),
-      ['review-standards', 'review-spec']
-    )
+    assert.equal(approved.packets?.[0].stage, 'retrospective')
   } finally {
     await context.cleanup()
   }
@@ -167,7 +164,7 @@ test('an untouched task template cannot pass without a native session receipt', 
   }
 })
 
-test('implementation follows approved planning and two reviews become parallel only after independent QA', async ({
+test('implementation follows approved planning and both parallel reviews precede independent QA', async ({
   assert,
 }) => {
   const context = await fixture()
@@ -187,20 +184,28 @@ test('implementation follows approved planning and two reviews become parallel o
     await context.controller.verify(context.run.id, 'engineering')
     const awaited3 = await context.controller.next(context.run.id)
 
-    assert.equal(awaited3.packets?.[0].stage, 'qa')
-    await context.record('qa')
+    assert.deepEqual(
+      awaited3.packets?.map((packet) => packet.stage),
+      ['review-standards', 'review-spec']
+    )
+    assert.isUndefined(awaited3.packets?.[0].qaCheckout)
+    await assert.rejects(() => context.controller.verify(context.run.id, 'qa'), /Cannot verify qa/)
+    await context.record('review-spec')
+    await assert.rejects(() => context.controller.verify(context.run.id, 'qa'), /Cannot verify qa/)
+    await context.record('review-standards')
     const awaited4 = await context.controller.next(context.run.id)
 
-    assert.include(awaited4.command!, 'verify')
+    assert.equal(awaited4.packets?.[0].stage, 'qa')
+    assert.isString(awaited4.packets?.[0].qaCheckout?.path)
     await context.controller.verify(context.run.id, 'qa')
     const awaited5 = await context.controller.next(context.run.id)
 
-    assert.deepEqual(
-      awaited5.packets?.map((packet) => packet.stage),
-      ['review-standards', 'review-spec']
-    )
-    await context.record('review-spec')
-    await context.record('review-standards')
+    assert.isString(awaited5.packets?.[0].qaVerification?.path)
+    const reviewed = await context.controller.status(context.run.id)
+
+    assert.isTrue(reviewed.reports['review-spec']?.passed)
+    assert.isTrue(reviewed.reports['review-standards']?.passed)
+    await context.record('qa')
     await context.record('retrospective')
     await context.controller.publish(context.run.id)
     await context.controller.publish(context.run.id)
@@ -302,9 +307,9 @@ test('QA gets two persisted automatic repairs and the third failure requires an 
     for (let round = 1; round <= 3; round++) {
       context.setGatePasses(true)
       await context.controller.verify(context.run.id, 'engineering')
-      await context.record('qa')
+      await context.reviews()
       context.setGatePasses(false)
-      await context.controller.verify(context.run.id, 'qa')
+      await context.record('qa')
       const resumed = new WorkflowController(context.store, context.ports)
 
       await resumed.resume(context.run.id)
@@ -337,7 +342,7 @@ test('review findings remain until the originating reviewer closes them after re
   const context = await fixture()
 
   try {
-    await context.throughQa()
+    await context.throughEngineering()
     const review = await context.report('review-spec')
 
     review.findings = [
@@ -351,8 +356,6 @@ test('review findings remain until the originating reviewer closes them after re
     await context.controller.record(context.run.id, review)
     await context.record('implementation')
     await context.controller.verify(context.run.id, 'engineering')
-    await context.record('qa')
-    await context.controller.verify(context.run.id, 'qa')
     const rerun = await context.report('review-spec')
 
     await assert.rejects(() => context.controller.record(context.run.id, rerun), /cannot disappear/)
@@ -402,7 +405,7 @@ test('finding deferral requires the specific finding and explicit Owner approval
   const context = await fixture()
 
   try {
-    await context.throughQa()
+    await context.throughEngineering()
     const review = await context.report('review-spec')
 
     review.findings = [
@@ -425,8 +428,6 @@ test('finding deferral requires the specific finding and explicit Owner approval
     })
     await context.record('implementation')
     await context.controller.verify(context.run.id, 'engineering')
-    await context.record('qa')
-    await context.controller.verify(context.run.id, 'qa')
     const deferred = await context.report('review-spec')
 
     deferred.findings = [
@@ -492,8 +493,6 @@ test('Coordinator and Delivery Lead can each escalate once with exact receipts a
       /already used/
     )
     await context.throughQa()
-    await context.record('review-standards')
-    await context.record('review-spec')
     const previous = await context.report('retrospective')
 
     await context.controller.escalate(

@@ -103,30 +103,37 @@ export async function fixture() {
           : runtime.git.inspect(path),
       prepareQa: runtime.git.prepareQa,
       qaScope: runtime.git.qaScope,
+      qaIntegrated: runtime.git.qaIntegrated,
       reviewDiff: runtime.git.reviewDiff,
     },
     verification: {
-      run: async (run, kind): Promise<GateEvidence> => ({
-        kind,
-        commit: run.commit,
-        sourceFingerprint: run.source.fingerprint,
-        startedAt: new Date().toISOString(),
-        finishedAt: new Date().toISOString(),
-        passed: gatePasses,
-        commands: [
-          {
-            argv: ['rtk', 'proxy', 'npm', 'run', 'test:coverage'],
-            exitCode: gatePasses ? 0 : 1,
-            log: 'external-gate.log',
-            digest: 'log',
+      run: async (run, kind): Promise<GateEvidence> => {
+        const execution =
+          kind === 'qa' ? await runtime.git.inspect(run.qaCheckout!.path) : { commit: run.commit }
+
+        return {
+          kind,
+          commit: run.commit,
+          executionCommit: execution.commit,
+          sourceFingerprint: run.source.fingerprint,
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          passed: gatePasses,
+          commands: [
+            {
+              argv: ['rtk', 'proxy', 'npm', 'run', 'test:coverage'],
+              exitCode: gatePasses ? 0 : 1,
+              log: 'external-gate.log',
+              digest: 'log',
+            },
+          ],
+          coverage: {
+            node: ['app/source.ts'],
+            browser: ['inertia/source.tsx'],
+            errors: gatePasses ? [] : ['Missed branch'],
           },
-        ],
-        coverage: {
-          node: ['app/source.ts'],
-          browser: ['inertia/source.tsx'],
-          errors: gatePasses ? [] : ['Missed branch'],
-        },
-      }),
+        }
+      },
     },
     publication: {
       plan: async (run, persist) => {
@@ -146,14 +153,23 @@ export async function fixture() {
   const controller = new WorkflowController(store, ports)
   const run = await controller.start('4', { config: { profile: 'openai' } })
   const report = async (stage: Stage): Promise<RoleReport> => {
-    const next = await controller.next(run.id)
-    const packet = next.packets?.find((item) => item.stage === stage)
+    let next = await controller.next(run.id)
+    let packet = next.packets?.find((item) => item.stage === stage)
 
     if (!packet) throw new Error(`No ${stage} packet: ${JSON.stringify(next)}`)
 
     const qaCommit = packet.qaCheckout
       ? await commands.execute(['git', 'rev-parse', 'HEAD'], packet.qaCheckout.path)
       : undefined
+
+    if (
+      stage === 'qa' &&
+      (!packet.qaVerification || packet.qaVerification.executionCommit !== qaCommit?.stdout.trim())
+    ) {
+      await controller.verify(run.id, 'qa')
+      next = await controller.next(run.id)
+      packet = next.packets!.find((item) => item.stage === stage)!
+    }
 
     return {
       ...packet.reportTemplate,
@@ -165,8 +181,11 @@ export async function fixture() {
         stage === 'plan'
           ? '```mermaid\nsequenceDiagram\nUser->>System: Save profile\n```'
           : `Completed ${stage}`,
-      evidence: ['https://example.test/evidence'],
-      passed: true,
+      evidence: [
+        'https://example.test/evidence',
+        ...(packet.qaVerification ? [packet.qaVerification.path] : []),
+      ],
+      passed: stage === 'qa' ? packet.qaVerification?.passed === true : true,
       model: {
         ...packet.reportTemplate.model,
         harness: 'test-native-harness',
@@ -189,11 +208,21 @@ export async function fixture() {
     await controller.publish(run.id)
     await record('implementation')
   }
-  const throughQa = async () => {
+  const throughEngineering = async () => {
     await prepare()
     await controller.verify(run.id, 'engineering')
+  }
+  const reviews = async () => {
+    await record('review-standards')
+    await record('review-spec')
+  }
+  const throughReviews = async () => {
+    await throughEngineering()
+    await reviews()
+  }
+  const throughQa = async () => {
+    await throughReviews()
     await record('qa')
-    await controller.verify(run.id, 'qa')
   }
 
   return {
@@ -205,6 +234,9 @@ export async function fixture() {
     report,
     record,
     prepare,
+    throughEngineering,
+    reviews,
+    throughReviews,
     throughQa,
     git,
     gitIn: async (cwd: string, ...argv: string[]) => {

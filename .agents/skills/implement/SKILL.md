@@ -1,6 +1,6 @@
 ---
 name: implement
-description: 'Take a GitHub issue through refinement, planning, implementation, independent QA, review, and retrospective to a ready PR.'
+description: 'Take a GitHub issue through refinement, planning, implementation, review, independent QA, and retrospective to a ready PR.'
 ---
 
 # Implement
@@ -13,7 +13,7 @@ Inside the native Coordinator, read `docs/agents/roles/coordinator.md` and execu
 
 1. Identify the issue or existing run from the invocation. If missing, ask the Owner. Inspect adapter setup with `npm run workflow:adapters -- doctor --harness <current-harness> --profile <configured-profile>` and run `npm run workflow -- start <issue>` or `resume <run-id>`. Honor `--dry-run` without mutations.
 2. Use `next <run-id>` to obtain stage packets and report templates. Dispatch isolated native agents with the indicated role document, focused sources, exact model/effort, and permitted scope. Capture native session/model receipts. Load role details on dispatch rather than loading every role into the Coordinator.
-3. Record reports through the controller and run the prescribed verification gates. QA prepares scenarios during engineering when useful; its final validation is independent. Dispatch both review modes in parallel after QA passes. Return findings to the Engineer and the originating validator for closure.
+3. Record reports through the controller and run the prescribed verification gates. After engineering passes, dispatch both independent review modes, which may run in parallel. QA starts final validation only after both reviews pass; it runs fresh verification, inspects the emitted artifact, and submits its final evidence-citing report afterward. Return findings to the Engineer, then repeat engineering, review, and QA on the corrected candidate. The originating validator closes its findings. QA may prepare scenarios during engineering without starting its final gate.
 4. Relay unresolved questions to the Owner and record actual answers. Keep dependent work paused; missing source access, canceled questions, and unavailable model settings are blockers. Resume from durable state without discarding work or resetting repair counts.
 5. Complete the retrospective, publish concise sanitized summaries, and mark the PR ready after final-commit local evidence and CI pass. Return the PR URL, remaining questions/limitations, and measured evidence.
 

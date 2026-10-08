@@ -79,11 +79,15 @@ export class WorkflowController {
     if (stages.indexOf(from) <= stages.indexOf('qa')) {
       delete run.gates.qa
       delete run.qaCheckout
+      delete run.qaFailureRound
     }
 
-    if (stages.indexOf(from) <= stages.indexOf('review-spec')) delete run.publication.reviewComment
+    if (stages.indexOf(from) <= stages.indexOf('qa')) delete run.publication.reviewComment
 
     delete run.publication.retrospectiveComment
+
+    if (run.publication.ready) delete run.publication.draftCommit
+
     delete run.publication.ready
 
     if (from === 'refinement' || from === 'plan') delete run.publication.planComment
@@ -139,7 +143,7 @@ export class WorkflowController {
     else if (run.status === 'blocked') run.status = 'active'
   }
 
-  private stage(run: RunState): Stage | 'engineering' | 'qa-verification' {
+  private stage(run: RunState): Stage | 'engineering' {
     if (run.repair) return 'implementation'
 
     for (const stage of ['refinement', 'plan', 'implementation'] as const) {
@@ -148,15 +152,22 @@ export class WorkflowController {
 
     if (!run.gates.engineering?.passed) return 'engineering'
 
-    if (!run.reports.qa?.passed) return 'qa'
-
-    if (!run.gates.qa?.passed) return 'qa-verification'
-
-    for (const stage of ['review-standards', 'review-spec', 'retrospective'] as const) {
+    for (const stage of ['review-standards', 'review-spec'] as const) {
       if (!run.reports[stage]?.passed) return stage
     }
 
+    if (!run.gates.qa?.passed || !run.reports.qa?.passed) return 'qa'
+
+    if (!run.reports.retrospective?.passed) return 'retrospective'
+
     return 'ready'
+  }
+
+  private needsDraft(run: RunState, stage: Stage | 'engineering') {
+    return (
+      ['review-standards', 'review-spec', 'qa', 'retrospective'].includes(stage) &&
+      (run.publication.draftCommit !== run.commit || !run.publication.prUrl)
+    )
   }
 
   async next(id: string): Promise<NextResult> {
@@ -174,12 +185,11 @@ export class WorkflowController {
 
       const stage = this.stage(run)
 
-      if (stage === 'qa' && !run.publication.prUrl && this.ports.publication.draft)
+      if (this.needsDraft(run, stage) && this.ports.publication.draft)
         return {
           runId: id,
           command: `npm run workflow -- publish ${id}`,
-          purpose:
-            'Push the first verified implementation and create the draft PR before independent QA',
+          purpose: 'Publish the verified candidate as a draft before renewing independent approval',
         }
 
       if (stage === 'implementation' && !run.publication.planComment)
@@ -190,10 +200,10 @@ export class WorkflowController {
             'Set Project In Progress and publish the approved development plan before implementation',
         }
 
-      if (stage === 'engineering' || stage === 'qa-verification')
+      if (stage === 'engineering')
         return {
           runId: id,
-          command: `npm run workflow -- verify ${id} ${stage === 'engineering' ? 'engineering' : 'qa'}`,
+          command: `npm run workflow -- verify ${id} engineering`,
         }
 
       if (stage === 'ready') {
@@ -247,6 +257,7 @@ export class WorkflowController {
             findings: [],
             questions: [],
             passed: false,
+            qaVerification: current === 'qa' ? artifacts.gates.qa : undefined,
           }
 
           return {
@@ -256,6 +267,15 @@ export class WorkflowController {
             worktree: current === 'qa' ? qaCheckout?.path : run.worktree,
             qaCheckout,
             qaIntegration: run.qaIntegration,
+            qaAudit: run.qaAudit,
+            qaVerification:
+              current === 'qa' && artifacts.gates.qa && run.gates.qa
+                ? {
+                    path: artifacts.gates.qa,
+                    passed: run.gates.qa.passed,
+                    executionCommit: run.gates.qa.executionCommit ?? '',
+                  }
+                : undefined,
             diff,
             privateSources: run.config.prd
               ? [
@@ -280,7 +300,7 @@ export class WorkflowController {
             reportArtifacts: artifacts.reports,
             findings: run.findings,
             questions: run.questions,
-            instructions: `Read docs/agents/roles/${role}.md. Use native harness dispatch; do not substitute unavailable model or effort. Return the versioned report with native session receipt and evidence. Private source pointers are local and must never be copied into public summaries. QA works only in the provided separate checkout and may change tests/** or inertia/tests/**; commit tests there and include qaCheckout receipt. Engineer integrates qaIntegration.commit into the delivery branch before fresh QA approval. Reviewers read the generated full diff artifact. Findings require originating-stage closure or explicit Owner-approved deferral.`,
+            instructions: `Read docs/agents/roles/${role}.md. Use native harness dispatch; do not substitute unavailable model or effort. Return the versioned report with native session receipt and evidence. Private source pointers are local and must never be copied into public summaries. Both independent reviews precede final QA verification and reporting. QA works only in the provided separate checkout and may change tests/** or inertia/tests/**; commit tests there, run npm run workflow -- verify ${id} qa, inspect the fresh evidence, then include qaCheckout and qaVerification receipts and its artifact path in evidence. Failed gates retain the checkout for QA findings; submit a failed final report before Engineer repair. Engineer integrates the complete qaIntegration delta into delivery, followed by fresh engineering, both reviews, and QA. Reviewers read the generated full diff artifact. Findings require originating-stage closure or explicit Owner-approved deferral.`,
             reportTemplate: template,
           }
         }),
@@ -288,9 +308,7 @@ export class WorkflowController {
     })
   }
 
-  private repair(run: RunState, gate: Stage | 'engineering') {
-    const round = (run.repairs[gate] ?? 0) + 1
-
+  private repair(run: RunState, gate: Stage | 'engineering', round = (run.repairs[gate] ?? 0) + 1) {
     if (round > 2) {
       run.repair = { gate, round }
       run.questions.push({
@@ -358,11 +376,29 @@ export class WorkflowController {
       if (report.stage === 'implementation' && !run.publication.planComment)
         throw new Error('Publish the approved development plan before implementation')
 
+      if (this.needsDraft(run, report.stage) && this.ports.publication.draft)
+        throw new Error('Publish the verified candidate as a draft before renewing approval')
+
       if (['implementation', 'review-standards', 'review-spec'].includes(report.stage)) {
         const checkout = run.worktree ? await this.ports.git.inspect(run.worktree) : undefined
 
         if (!checkout?.clean || checkout.commit !== run.commit)
           throw new Error('Role report requires a clean pinned checkout')
+      }
+
+      if (report.stage === 'implementation') {
+        const integrations = [
+          ...(run.qaIntegrations ?? []),
+          ...(run.qaIntegration ? [run.qaIntegration] : []),
+        ]
+
+        for (const integration of integrations) {
+          if (
+            !run.worktree ||
+            !(await this.ports.git.qaIntegrated(run.worktree, integration, run.commit))
+          )
+            throw new Error('Complete committed QA test delta must be integrated into delivery')
+        }
       }
 
       if (report.stage === 'qa') {
@@ -386,9 +422,26 @@ export class WorkflowController {
         if (!scope.clean || scope.commit !== report.qaCheckout.commit)
           throw new Error('QA checkout must be clean and pinned to its report commit')
 
+        const artifacts = await this.store.artifacts(run)
+        const gate = run.gates.qa
+
+        if (
+          !gate ||
+          gate.commit !== run.commit ||
+          gate.sourceFingerprint !== run.source.fingerprint ||
+          gate.executionCommit !== scope.commit ||
+          report.qaVerification !== artifacts.gates.qa ||
+          !report.evidence.includes(artifacts.gates.qa ?? '')
+        )
+          throw new Error('QA report must audit its fresh pinned controller verification artifact')
+
+        if (report.passed && !gate.passed)
+          throw new Error('QA approval requires passing controller verification')
+
         if (scope.changedFiles.length)
           run.qaIntegration = {
             path: run.qaCheckout.path,
+            baseCommit: run.commit,
             commit: scope.commit,
             changedFiles: scope.changedFiles,
           }
@@ -464,17 +517,43 @@ export class WorkflowController {
         action: `Recorded ${report.stage} report (${report.passed ? 'pass' : 'fail'})`,
       })
 
+      if (report.stage === 'qa') {
+        const audit = await this.store.artifacts(run)
+
+        if (!audit.reports.qa || !audit.gates.qa)
+          throw new Error('QA report and verification artifacts must be available')
+
+        run.qaAudit = { report: audit.reports.qa, verification: audit.gates.qa }
+      }
+
       if (report.stage === 'implementation') {
         delete run.repair
         delete run.gates.engineering
         delete run.gates.qa
-        delete run.qaIntegration
+        delete run.qaFailureRound
+
+        if (run.qaIntegration) {
+          run.qaIntegrations = [...(run.qaIntegrations ?? []), run.qaIntegration]
+          delete run.qaIntegration
+        }
       }
 
       if (!report.passed || report.findings.some((finding) => finding.status === 'open')) {
         if (['qa', 'review-standards', 'review-spec'].includes(report.stage))
-          this.repair(run, report.stage)
+          this.repair(run, report.stage, report.stage === 'qa' ? run.qaFailureRound : undefined)
         else report.passed = false
+      } else if (report.stage === 'qa') {
+        delete run.qaFailureRound
+
+        if (run.qaIntegration) {
+          run.repair = { gate: 'qa', round: 0 }
+          this.invalidate(run, 'implementation')
+          run.events.push({
+            at: new Date().toISOString(),
+            action:
+              'Integrate committed QA tests into delivery branch, then obtain fresh QA approval',
+          })
+        }
       }
 
       return run
@@ -491,11 +570,11 @@ export class WorkflowController {
 
       const stage = this.stage(run)
 
-      if (
-        (kind === 'engineering' && stage !== 'engineering') ||
-        (kind === 'qa' && stage !== 'qa-verification')
-      )
+      if ((kind === 'engineering' && stage !== 'engineering') || (kind === 'qa' && stage !== 'qa'))
         throw new Error(`Cannot verify ${kind} during ${stage}`)
+
+      if (kind === 'qa' && this.needsDraft(run, stage) && this.ports.publication.draft)
+        throw new Error('Publish the verified candidate as a draft before QA verification')
 
       const executionDirectory = kind === 'qa' ? run.qaCheckout?.path : run.worktree
       const before = executionDirectory
@@ -505,9 +584,29 @@ export class WorkflowController {
       if (
         !before?.clean ||
         (kind === 'engineering' && before.commit !== run.commit) ||
-        (kind === 'qa' && before.commit !== run.reports.qa?.qaCheckout?.commit)
+        (kind === 'qa' && run.qaCheckout?.baseCommit !== run.commit)
       )
         throw new Error('Verification requires a clean pinned checkout')
+
+      if (kind === 'qa') {
+        const scope = await this.ports.git.qaScope(executionDirectory!, run.commit)
+
+        if (
+          scope.commit !== before.commit ||
+          !scope.clean ||
+          scope.changedFiles.some(
+            (path) => !path.startsWith('tests/') && !path.startsWith('inertia/tests/')
+          )
+        )
+          throw new Error('QA verification requires a clean test-only pinned checkout')
+
+        const checkout = run.qaCheckout
+        const failureRound = run.qaFailureRound
+
+        this.invalidate(run, 'qa')
+        run.qaCheckout = checkout
+        run.qaFailureRound = failureRound
+      }
 
       const evidence = await this.ports.verification.run(run, kind, this.store.directory(id))
       const after = await this.ports.git.inspect(executionDirectory!)
@@ -516,6 +615,7 @@ export class WorkflowController {
         after.commit !== before.commit ||
         !after.clean ||
         evidence.commit !== run.commit ||
+        evidence.executionCommit !== before.commit ||
         evidence.sourceFingerprint !== run.source.fingerprint
       )
         throw new Error('Checkout changed during verification')
@@ -526,15 +626,13 @@ export class WorkflowController {
         action: `${kind} verification ${evidence.passed ? 'passed' : 'failed'}`,
       })
 
-      if (!evidence.passed) this.repair(run, kind === 'engineering' ? 'engineering' : 'qa')
-      else if (kind === 'qa' && run.qaIntegration) {
-        run.repair = { gate: 'qa', round: 0 }
-        this.invalidate(run, 'implementation')
-        run.events.push({
-          at: new Date().toISOString(),
-          action:
-            'Integrate committed QA tests into delivery branch, then obtain fresh QA approval',
-        })
+      if (!evidence.passed) {
+        if (kind === 'engineering') this.repair(run, 'engineering')
+        else if (!run.qaFailureRound) {
+          run.qaFailureRound = (run.repairs.qa ?? 0) + 1
+
+          if (run.qaFailureRound <= 2) run.repairs.qa = run.qaFailureRound
+        }
       }
 
       return evidence
@@ -683,8 +781,7 @@ export class WorkflowController {
 
       if (
         !run.blockers.length &&
-        this.stage(run) === 'qa' &&
-        !run.publication.prUrl &&
+        this.needsDraft(run, this.stage(run)) &&
         this.ports.publication.draft
       ) {
         const checkout = run.worktree ? await this.ports.git.inspect(run.worktree) : undefined

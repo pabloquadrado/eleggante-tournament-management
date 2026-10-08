@@ -7,7 +7,7 @@ test('an explicit Owner denial cannot defer an open finding or erase its repair 
   const context = await fixture()
 
   try {
-    await context.throughQa()
+    await context.throughEngineering()
     const review = await context.report('review-spec')
 
     review.findings = [
@@ -32,8 +32,6 @@ test('an explicit Owner denial cannot defer an open finding or erase its repair 
     })
     await context.record('implementation')
     await context.controller.verify(context.run.id, 'engineering')
-    await context.record('qa')
-    await context.controller.verify(context.run.id, 'qa')
     const deferred = await context.report('review-spec')
 
     deferred.findings = [

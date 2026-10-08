@@ -503,8 +503,6 @@ test('publication resumes a draft once the exact current-head CI check passes wi
 
   try {
     await context.throughQa()
-    await context.record('review-standards')
-    await context.record('review-spec')
     await context.record('retrospective')
     const run = await context.controller.status(context.run.id)
 

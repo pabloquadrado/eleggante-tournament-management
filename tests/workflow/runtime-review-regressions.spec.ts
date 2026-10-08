@@ -3,12 +3,11 @@ import { join } from 'node:path'
 import { test } from '@japa/runner'
 import { LocalWorkflowRuntime } from '../../scripts/agent-workflow/runtime.ts'
 import type { CommandPort } from '../../scripts/agent-workflow/runtime.ts'
+import type { RunState } from '../../scripts/agent-workflow/contracts.ts'
 import { fixture } from './support.ts'
 
 async function readyRun(context: Awaited<ReturnType<typeof fixture>>) {
   await context.throughQa()
-  await context.record('review-standards')
-  await context.record('review-spec')
   await context.record('retrospective')
   const run = await context.controller.status(context.run.id)
 
@@ -19,6 +18,123 @@ async function readyRun(context: Awaited<ReturnType<typeof fixture>>) {
 
   return run
 }
+
+function currentPrBoundary(run: RunState, operations: string[], initialDraft: boolean) {
+  let isDraft = initialDraft
+  const boundary: CommandPort = {
+    execute: async (argv) => {
+      let stdout = ''
+
+      if (argv[0] === 'git' && argv[1] === 'remote') stdout = 'https://github.com/example/repo.git'
+      else if (argv[0] === 'git' && argv[1] === 'push') operations.push('push')
+      else if (argv[0] === 'gh' && argv[1] === 'pr' && argv[2] === 'list')
+        stdout = JSON.stringify([
+          { url: 'https://github.com/example/repo/pull/5', isDraft, headRefOid: run.commit },
+        ])
+      else if (argv[0] === 'gh' && argv[1] === 'pr' && argv[2] === 'view')
+        stdout = JSON.stringify({
+          headRefOid: run.commit,
+          statusCheckRollup: [{ name: 'test', conclusion: 'SUCCESS', status: 'COMPLETED' }],
+        })
+      else if (argv[0] === 'gh' && argv[1] === 'pr' && argv[2] === 'ready') {
+        isDraft = argv.includes('--undo')
+        operations.push(isDraft ? 'draft' : 'ready')
+      } else if (argv[0] === 'gh' && argv[1] === 'pr' && argv[2] === 'edit') operations.push('edit')
+      else throw new Error(`Unexpected command: ${argv.join(' ')}`)
+
+      return { exitCode: 0, stdout, stderr: '' }
+    },
+  }
+
+  return { boundary, isDraft: () => isDraft }
+}
+
+test('same-commit approval invalidation restores a ready PR to draft before review resumes', async ({
+  assert,
+}) => {
+  const context = await fixture()
+  const operations: string[] = []
+
+  try {
+    const run = await readyRun(context)
+    const priorReview = run.reports['review-spec']!
+
+    run.publication.ready = true
+    run.publication.prUrl = 'https://github.com/example/repo/pull/5'
+    run.publication.pushedCommit = run.commit
+    run.publication.draftCommit = run.commit
+    await context.store.save(run)
+    const pr = currentPrBoundary(run, operations, false)
+    const runtime = new LocalWorkflowRuntime(context.directory, pr.boundary)
+
+    context.ports.publication.draft = runtime.publication.draft
+    const question = await context.controller.question(
+      run.id,
+      'Reconfirm the specification approval',
+      'review-spec'
+    )
+
+    await context.controller.answer(
+      run.id,
+      question.id,
+      'Review the existing acceptance examples',
+      {
+        userReference: 'owner-review-renewal-message',
+      }
+    )
+    const dispatch = await context.controller.next(run.id)
+
+    assert.include(dispatch.command!, 'publish')
+    assert.isUndefined(dispatch.packets)
+    await assert.rejects(
+      () => context.controller.record(run.id, priorReview),
+      /as a draft before renewing approval/
+    )
+    await context.controller.publish(run.id)
+    const drafted = await context.controller.status(run.id)
+    const review = await context.controller.next(run.id)
+
+    assert.isTrue(pr.isDraft())
+    assert.deepEqual(operations, ['draft', 'edit'])
+    assert.equal(drafted.commit, run.commit)
+    assert.equal(drafted.publication.draftCommit, run.commit)
+    assert.isUndefined(drafted.publication.ready)
+    assert.isTrue(drafted.reports['review-standards']?.passed)
+    assert.isUndefined(drafted.reports.qa)
+    assert.isUndefined(drafted.gates.qa)
+    assert.equal(review.packets?.[0].stage, 'review-spec')
+    assert.isUndefined(review.packets?.[0].qaCheckout)
+    assert.deepEqual(drafted.repairs, {})
+  } finally {
+    await context.cleanup()
+  }
+})
+
+test('unchanged valid ready retries preserve readiness without publication writes', async ({
+  assert,
+}) => {
+  const context = await fixture()
+  const operations: string[] = []
+
+  try {
+    const run = await readyRun(context)
+
+    run.publication.pushedCommit = run.commit
+    const pr = currentPrBoundary(run, operations, true)
+    const runtime = new LocalWorkflowRuntime(context.directory, pr.boundary)
+
+    await runtime.publication.publish(run, async () => {}, context.store.directory(run.id))
+    assert.deepEqual(operations, ['edit', 'ready'])
+    operations.length = 0
+    await runtime.publication.publish(run, async () => {}, context.store.directory(run.id))
+    await runtime.publication.publish(run, async () => {}, context.store.directory(run.id))
+    assert.deepEqual(operations, [])
+    assert.isTrue(run.publication.ready)
+    assert.isFalse(pr.isDraft())
+  } finally {
+    await context.cleanup()
+  }
+})
 
 test('additional configured CI checks cannot replace the mandatory application test check', async ({
   assert,

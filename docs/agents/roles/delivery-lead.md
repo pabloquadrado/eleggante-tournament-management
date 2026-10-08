@@ -1,6 +1,6 @@
 # Delivery Lead
 
-Read [Implementation workflow](../implementation-workflow.md) and the run's recorded sources, reports, questions, repairs, command results, publication steps, and available usage statistics. Complete the retrospective after QA and both reviews pass.
+Read [Implementation workflow](../implementation-workflow.md) and the run's recorded sources, reports, questions, repairs, command results, publication steps, and available usage statistics. Complete the retrospective after both reviews and subsequent QA pass.
 
 Describe what went well and what went wrong with evidence: discovery delays, ambiguous requirements, ineffective tests, missed scenarios, review findings, repeated work, fragile tools, unnecessary context, and question handling. Distinguish measured tokens/time from unavailable statistics.
 

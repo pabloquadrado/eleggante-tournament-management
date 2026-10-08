@@ -34,8 +34,7 @@ async function qaReport(context: Awaited<ReturnType<typeof fixture>>): Promise<R
 }
 
 async function pendingTwoCommitPatch(context: Awaited<ReturnType<typeof fixture>>) {
-  await context.prepare()
-  await context.controller.verify(context.run.id, 'engineering')
+  await context.throughReviews()
   const report = await qaReport(context)
   const checkout = report.qaCheckout!.path
   const baseCommit = context.run.commit
@@ -54,12 +53,9 @@ async function pendingTwoCommitPatch(context: Awaited<ReturnType<typeof fixture>
   await context.gitIn(checkout, 'commit', '-m', 'Second independent regression')
   const commit = await context.gitIn(checkout, 'rev-parse', 'HEAD')
   const scope = await context.ports.git.qaScope(checkout, baseCommit)
-  const run = await context.controller.status(context.run.id)
 
-  // Persist an authentic test-only handoff independently of the old QA gate-order defect.
-  run.qaIntegration = { path: checkout, baseCommit, commit, changedFiles: scope.changedFiles }
-  run.repair = { gate: 'qa', round: 0 }
-  await context.store.save(run)
+  await context.controller.verify(context.run.id, 'qa')
+  await context.controller.record(context.run.id, await qaReport(context))
 
   return { firstCommit, commit, changedFiles: scope.changedFiles }
 }
@@ -98,10 +94,9 @@ test('the complete multi-commit QA delta must reach delivery and a later dropped
     await context.git('cherry-pick', patch.firstCommit)
     await context.controller.resume(context.run.id)
     await assert.rejects(() => context.record('implementation'), /QA|test|integration|patch/)
-    assert.equal(
-      (await context.controller.status(context.run.id)).qaIntegration?.commit,
-      patch.commit
-    )
+    const partial = await context.controller.status(context.run.id)
+
+    assert.equal(partial.qaIntegration?.commit, patch.commit)
     await context.git('cherry-pick', patch.commit)
     await context.controller.resume(context.run.id)
     await context.record('implementation')
@@ -119,7 +114,57 @@ test('the complete multi-commit QA delta must reach delivery and a later dropped
     await context.git('commit', '-m', 'Accidentally drop a supplied QA regression')
     await context.controller.resume(context.run.id)
     await assert.rejects(() => context.record('implementation'), /QA|test|integration|patch/)
-    assert.isUndefined((await context.controller.status(context.run.id)).reports.implementation)
+    const dropped = await context.controller.status(context.run.id)
+
+    assert.isUndefined(dropped.reports.implementation)
+  } finally {
+    await context.cleanup()
+  }
+})
+
+test('compatible extra Engineer tests survive proof of complete independent QA integration', async ({
+  assert,
+}) => {
+  const context = await fixture()
+
+  try {
+    const patch = await pendingTwoCommitPatch(context)
+    const extraPath = join(context.directory, 'tests/engineer-extra.spec.ts')
+
+    await mkdir(join(context.directory, 'tests'), { recursive: true })
+    await writeFile(extraPath, 'export const additionalEngineerScenario = true\n')
+    await context.git('add', 'tests/engineer-extra.spec.ts')
+    await context.git('commit', '-m', 'Add compatible Engineer scenario')
+    await context.git('cherry-pick', patch.firstCommit, patch.commit)
+    const index = await context.git('write-tree')
+
+    await context.controller.resume(context.run.id)
+    await context.record('implementation')
+    const integrated = await context.controller.status(context.run.id)
+
+    assert.isUndefined(integrated.qaIntegration)
+    assert.equal(integrated.qaIntegrations?.[0].commit, patch.commit)
+    assert.equal(await context.git('write-tree'), index)
+    assert.equal(await context.git('status', '--porcelain', '--untracked-files=no'), '')
+    assert.equal(
+      await readFile(extraPath, 'utf8'),
+      'export const additionalEngineerScenario = true\n'
+    )
+    assert.equal(
+      await readFile(join(context.directory, 'tests/qa-first.spec.ts'), 'utf8'),
+      'export const firstRegression = true\n'
+    )
+    assert.equal(
+      await readFile(join(context.directory, 'tests/qa-second.spec.ts'), 'utf8'),
+      'export const secondRegression = true\n'
+    )
+    await context.controller.verify(context.run.id, 'engineering')
+    await context.reviews()
+    await context.record('qa')
+    const approved = await context.controller.next(context.run.id)
+
+    assert.equal(approved.packets?.[0].stage, 'retrospective')
+    assert.deepEqual(integrated.repairs, {})
   } finally {
     await context.cleanup()
   }
@@ -131,8 +176,7 @@ test('fresh controller QA evidence precedes and is audited by the final QA appro
   const context = await fixture()
 
   try {
-    await context.prepare()
-    await context.controller.verify(context.run.id, 'engineering')
+    await context.throughReviews()
     const premature = await qaReport(context)
 
     await assert.rejects(
@@ -158,10 +202,7 @@ test('fresh controller QA evidence precedes and is audited by the final QA appro
     await context.controller.record(context.run.id, final)
     const next = await context.controller.next(context.run.id)
 
-    assert.deepEqual(
-      next.packets?.map((packet) => packet.stage),
-      ['review-standards', 'review-spec']
-    )
+    assert.equal(next.packets?.[0].stage, 'retrospective')
   } finally {
     await context.cleanup()
   }
@@ -173,8 +214,7 @@ test('QA may report findings from a failed fresh gate without consuming two repa
   const context = await fixture()
 
   try {
-    await context.prepare()
-    await context.controller.verify(context.run.id, 'engineering')
+    await context.throughReviews()
     await context.controller.next(context.run.id)
     context.setGatePasses(false)
     const evidence = await context.controller.verify(context.run.id, 'qa')
@@ -199,10 +239,27 @@ test('QA may report findings from a failed fresh gate without consuming two repa
     assert.equal(run.findings.find((finding) => finding.id === 'qa-fresh-gate')?.status, 'open')
     assert.isTrue(Boolean(report.qaVerification))
     assert.include(report.evidence, report.qaVerification!)
-    assert.equal(
-      (await context.controller.next(context.run.id)).packets?.[0].stage,
-      'implementation'
-    )
+    const repair = await context.controller.next(context.run.id)
+
+    assert.equal(repair.packets?.[0].stage, 'implementation')
+    await context.record('implementation')
+    context.setGatePasses(true)
+    await context.controller.verify(context.run.id, 'engineering')
+    await context.reviews()
+    const corrected = await context.controller.next(context.run.id)
+
+    assert.equal(corrected.packets?.[0].stage, 'qa')
+    assert.equal(corrected.packets?.[0].findings[0].status, 'open')
+    await context.controller.verify(context.run.id, 'qa')
+    const rerun = await qaReport(context)
+
+    await assert.rejects(() => context.controller.record(context.run.id, rerun), /cannot disappear/)
+    rerun.findings = [{ ...report.findings[0], status: 'closed' }]
+    await context.controller.record(context.run.id, rerun)
+    const closed = await context.controller.status(context.run.id)
+
+    assert.equal(closed.findings[0].status, 'closed')
+    assert.equal(closed.repairs.qa, 1)
   } finally {
     await context.cleanup()
   }

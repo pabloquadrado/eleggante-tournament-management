@@ -2,6 +2,8 @@
 
 Agreed on 2026-10-07. This is the shared workflow for implementing one GitHub issue. The AI harness supplies isolated agents and interactive questions; the repository controller owns stage order, durable state, evidence, and publication gates. Provider SDKs and paid inference are outside the controller.
 
+On 2026-10-07, the Owner revised the quality-gate order to **implementation → review → QA**. Any review or QA finding returns to implementation, followed by review again and fresh QA. QA does not overlap the review gate.
+
 ## Entry and setup
 
 Use `/implement <issue>` in Claude Code or OpenCode, or `$implement <issue>` in Codex. A harness without a registered command can read `.agents/skills/implement/SKILL.md` explicitly. It must support isolated delegation and owner questions to execute this workflow; it cannot substitute one agent impersonating every role.
@@ -47,25 +49,28 @@ Load a role's document only when dispatching that role. Read the input packet an
 | Refinement     | [Tech Lead](roles/tech-lead.md)         | Current approved requirements and acceptance examples with source references     |
 | Plan           | Tech Lead                               | Technical plan comment and Mermaid sequence diagram                              |
 | Implementation | [Senior Engineer](roles/engineer.md)    | Tested feature, required docs, passing engineering gate                          |
-| QA             | [QA](roles/qa.md)                       | Independent coverage run, behavior analysis, regression tests, findings resolved |
 | Review         | [Reviewer](roles/reviewer.md)           | Both Standards/security/reliability and Spec reviews pass                        |
+| QA             | [QA](roles/qa.md)                       | Independent coverage run, behavior analysis, regression tests, findings resolved |
 | Retrospective  | [Delivery Lead](roles/delivery-lead.md) | Evidence-based report and proposed improvements                                  |
 | Ready          | Coordinator                             | Final-commit local gates and CI pass; PR ready for Owner                         |
 
 ```mermaid
 flowchart LR
-  R[Refine] --> P[Plan] --> E[Engineer] --> Q[QA]
-  Q --> S[Standards and security review]
-  Q --> C[Specification review]
-  S --> T[Retrospective]
-  C --> T
+  R[Refine] --> P[Plan] --> E[Engineer]
+  E --> S[Standards and security review]
+  E --> C[Specification review]
+  S --> B{Both reviews pass}
+  C --> B
+  B --> V[Fresh QA verification]
+  V --> Q[QA evidence analysis and final report]
+  Q -->|Pass| T[Retrospective]
   T --> D[Ready PR]
   Q -->|Findings| E
   S -->|Findings| E
   C -->|Findings| E
 ```
 
-QA can prepare its scenario matrix from the approved plan while the Engineer implements. Its final analysis uses the completed code. The two review checks run in parallel after QA passes. Cap concurrency at the harness limit; the default target is three child agents. The Engineer is the single production-code owner. QA writes regression tests in a separate worktree; the Coordinator integrates them and the Engineer fixes production behavior. Reviewers remain read-only.
+QA can prepare its scenario matrix from the approved plan while the Engineer implements. The two independent review modes may run in parallel after the engineering gate passes. QA starts final verification and analysis only after both reviews pass for the candidate. It validates the reviewed code and corrections alongside its own scenario analysis. Any correction or integration of QA tests requires fresh engineering, both reviews, and then QA. Cap concurrency at the harness limit; the default target is three child agents. The Engineer is the single production-code owner. QA writes regression tests in a separate worktree; the Coordinator integrates them and the Engineer fixes production behavior. Reviewers remain read-only.
 
 ## Reports, questions, and recovery
 
@@ -73,7 +78,7 @@ QA can prepare its scenario matrix from the approved plan while the Engineer imp
 
 After the plan report passes, call `publish <run-id>` to set Project In Progress and publish its development-plan comment. Only then does `next` dispatch implementation. Call `publish` again at the ready stage for final delivery; the operation resumes its recorded steps on retries.
 
-After engineering passes, `publish` can push the candidate and create its draft PR before QA. It remains draft through QA, review, retrospective, and CI. Final `publish` records sanitized summaries and marks ready.
+After engineering passes, `publish` can push the candidate and create its draft PR before review. It remains draft through review, QA, retrospective, and CI. A previously ready PR returns to draft before pushing a revised candidate or renewing invalidated approval. Final `publish` records sanitized summaries and marks ready; an unchanged valid ready retry preserves readiness without repeating publication writes.
 
 Every report identifies the native session and requested/effective model and effort, distinguishes findings from questions, and cites commands, observable behavior, or source passages. A separate `publicSummary` contains material suitable for the issue/PR; detailed `summary`, evidence paths, and native receipts remain local. Passing percentages or an agent's statement that tests passed cannot replace controller-generated verification evidence. Unavailable usage measurements remain unknown; do not estimate savings or costs as measured facts.
 
@@ -101,15 +106,17 @@ Primary sources for the settings and adapter contracts: [OpenAI models](https://
 
 ## Verification and delivery
 
-Use `verify <run-id> engineering` for build, type checks, lint, architecture, and full application coverage. QA uses `verify <run-id> qa` for a fresh independent full coverage run. Verify 100% statements, branches, functions, and lines for each included Node/browser application file, with the repository's documented exclusions. QA also checks assertion quality and scenarios beyond executed branches. The controller and adapter tests are developer-tool tests; their results do not replace the application's coverage gate.
+Use `verify <run-id> engineering` for build, type checks, lint, architecture, and full application coverage. QA runs `verify <run-id> qa` before its final report, then reads the immutable `qaVerification.path` artifact from `next` and cites that exact path in both the report's `qaVerification` and `evidence`. The evidence must match the candidate, source fingerprint, and QA checkout's execution commit. QA inspects 100% statements, branches, functions, and lines per included Node/browser application file, documented exclusions, assertion quality, and scenarios beyond executed branches. A failed gate retains the checkout for analysis; QA records its findings before Engineer repair, and the same failure consumes one repair round. The controller and adapter tests are developer-tool tests; their results do not replace the application's coverage gate.
 
 Verification uses the repository's Docker test service with a separate Compose project for each run. It mounts the assigned checkout, pins the test database, installs that checkout's dependencies, and runs migrations and build before checks that need generated files. Local environment files are copied into isolated worktrees with restricted permissions and remain ignored. The controller stops its database after verification and retains its test volume and logs for diagnosis; recorded recovery commands identify only that run's resources. Docker and the configured local test environment must be available.
 
-`next` provisions QA's separate checkout at the candidate commit. Its report includes that checkout's base and current commits. Committed, dirty, and untracked production changes fail the test-only scope check. New QA tests must reach the delivery branch; integrating them triggers a fresh engineering/QA pass without consuming a failure repair round merely for adding tests.
+After both reviews pass, `next` provisions QA's separate checkout at the candidate commit. Its report includes that checkout's base and current commits. Committed, dirty, and untracked production changes fail the test-only scope check. New QA tests must reach the delivery branch; integrating them triggers fresh engineering, both reviews, and QA without consuming a failure repair round merely for adding tests. The controller retains the complete multi-commit QA delta and its recorded base, verifies its resulting tree against delivery, and preserves this proof across later candidate changes. An unchanged candidate, partial integration, or dropped supplied test cannot clear the handoff.
+
+Install Git with `merge-tree --write-tree --merge-base` support (Git 2.43 or newer; see the [Git merge-tree contract](https://git-scm.com/docs/git-merge-tree/2.43.0)). The proof uses the explicit QA base and leaves the working tree and index unchanged. Missing support or a conflicted/nonmatching merge fails closed. The Docker test image includes a compatible Git version so developer-tool tests exercise this same proof.
 
 The issue body remains the durable product contract. Follow `docs/agents/issue-tracker.md`: set Project #1 to In Progress before publishing the plan comment, keep technical plans in comments, and record refinements or unresolved decisions there. Use stable run markers to avoid duplicate comments and PR creation on retries. Publish summaries rather than private PRD passages or raw session logs.
 
-Keep the PR draft until engineering, QA, both reviews, retrospective, and CI pass for its final commit. The retrospective proposes instruction changes; it does not modify the rules governing future runs. Store detailed logs and resumable state locally; publish concise plan, QA, review, and retrospective summaries in the issue/PR. The Owner alone merges. Project status becomes Done only after the implementation reaches `main`.
+Keep the PR draft until engineering, both reviews, QA, retrospective, and CI pass for its final commit. The retrospective proposes instruction changes; it does not modify the rules governing future runs. Store detailed logs and resumable state locally; publish concise plan, review, QA, and retrospective summaries in the issue/PR. The Owner alone merges. Project status becomes Done only after the implementation reaches `main`.
 
 The current required CI check is `test`, whose workflow runs build, types, lint, developer-tool tests, and full application coverage. `requiredChecks` can name additional required checks in local configuration. Skipped, neutral, failed, pending, or stale required checks cannot mark the PR ready.
 

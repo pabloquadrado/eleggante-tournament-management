@@ -101,6 +101,8 @@ The outer use case owns the unit of work. Shared OTP creation, consumption, prof
 
 Developer orchestration is tooling outside the product domain. Its controller consumes focused source, Git, verification, and publication contracts; subprocess/filesystem adapters implement those contracts. It has no provider SDK or application-domain dependency. The native harness executes isolated roles using shared documents and passes reports to the controller.
 
+The Owner-approved stage order is refinement → plan → engineering → both reviews → QA → retrospective → ready PR. Review and QA findings loop through engineering, both reviews, and QA again.
+
 ```mermaid
 flowchart LR
   command[Native implement command or shared skill] --> coordinator[Coordinator agent]
@@ -108,9 +110,16 @@ flowchart LR
   controller --> state[Local gitignored run state and evidence]
   controller --> sources[GitHub issue/spec and private PRD references]
   controller --> gates[Build, types, architecture, tests and coverage]
+  gates --> reviews[Both independent reviews]
+  reviews --> qa[Fresh QA verification and report]
+  qa --> retrospective[Retrospective]
+  retrospective --> delivery
+  qa --> qaEvidence[Immutable QA verification artifacts]
+  qaEvidence --> reports
   coordinator --> agents[Tech Lead, Engineer, QA, reviewers and Delivery Lead]
   agents --> reports[Commit-bound reports and isolated test patches]
   reports --> controller
+  controller --> integration[Explicit-base Git tree proof for complete QA test deltas]
   controller --> delivery[Issue plan, draft PR and ready review]
   owner[Owner] -->|Answers| coordinator
   delivery -->|Review and merge| owner

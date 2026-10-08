@@ -20,6 +20,7 @@ import type {
   SourceSnapshot,
   WorkflowConfig,
   WorkflowPorts,
+  QaIntegration,
 } from './contracts.ts'
 
 const { createCoverageMap } = coverageLibrary
@@ -52,6 +53,21 @@ function githubRepository(value: string, issue = false) {
     throw new Error(repositoryMismatch)
 
   return `${match[1]}/${issue ? match[2] : match[2].replace(/\.git$/i, '')}`.toLowerCase()
+}
+
+function canonicalPublicationText(value: string) {
+  let previous = ''
+
+  while (value !== previous) {
+    previous = value
+    value = value.replace(/(?:%[\da-f]{2})+/gi, (encoded) => {
+      const bytes = Uint8Array.from(encoded.slice(1).split('%'), (hex) => Number.parseInt(hex, 16))
+
+      return new TextDecoder('utf-8').decode(bytes)
+    })
+  }
+
+  return value.normalize('NFC')
 }
 
 export type CommandResult = { exitCode: number; stdout: string; stderr: string }
@@ -622,6 +638,52 @@ export class LocalWorkflowRuntime implements WorkflowPorts {
         ],
       }
     },
+    qaIntegrated: async (directory: string, integration: QaIntegration, deliveryCommit: string) => {
+      if (!integration.baseCommit) return false
+
+      const scope = await this.git.qaScope(integration.path, integration.baseCommit)
+
+      if (
+        !scope.clean ||
+        scope.commit !== integration.commit ||
+        scope.changedFiles.some(
+          (path) => !path.startsWith('tests/') && !path.startsWith('inertia/tests/')
+        ) ||
+        JSON.stringify([...scope.changedFiles].sort()) !==
+          JSON.stringify([...integration.changedFiles].sort())
+      )
+        return false
+
+      const support = await this.commands.execute(['git', 'merge-tree', '-h'], directory, 10000)
+      const help = `${support.stdout}\n${support.stderr}`
+
+      if (
+        ![0, 129].includes(support.exitCode) ||
+        !help.includes('--write-tree') ||
+        !/--(?:\[no-\])?merge-base\b/.test(help)
+      )
+        throw new Error(
+          'Install Git 2.43 or newer with merge-tree --write-tree --merge-base support for QA integration verification'
+        )
+
+      const merged = await this.commands.execute(
+        [
+          'git',
+          'merge-tree',
+          '--write-tree',
+          `--merge-base=${integration.baseCommit}`,
+          deliveryCommit,
+          integration.commit,
+        ],
+        directory
+      )
+
+      if (merged.exitCode !== 0) return false
+
+      const tree = await this.command(['git', 'rev-parse', `${deliveryCommit}^{tree}`], directory)
+
+      return merged.stdout.trim() === tree
+    },
     reviewDiff: async (run: RunState, directory: string) => {
       const path = join(directory, `review-${run.commit}.patch`)
       const patch = await this.command(
@@ -750,16 +812,7 @@ export class LocalWorkflowRuntime implements WorkflowPorts {
   }
 
   private async assertPublic(run: RunState, body: string) {
-    let decoded = body
-    let previous = ''
-
-    while (decoded !== previous) {
-      previous = decoded
-      decoded = decoded.replace(/%([\da-f]{2})/gi, (_match, hex: string) =>
-        String.fromCharCode(Number.parseInt(hex, 16))
-      )
-    }
-
+    const decoded = canonicalPublicationText(body)
     const urls = decoded.match(/\bhttps?:\/\/[^\s<>"'`)]+/gi) ?? []
     const localUrl = urls.some((value) => {
       try {
@@ -791,14 +844,22 @@ export class LocalWorkflowRuntime implements WorkflowPorts {
       .filter((value) => value && value.length >= 6)
     const privateRefs = run.config.prd ? [run.config.prd.path, run.config.prd.locator] : []
 
-    if ([...receipts, ...privateRefs].some((value) => value && body.includes(value)))
+    if (
+      [...receipts, ...privateRefs].some(
+        (value) => value && decoded.includes(canonicalPublicationText(value))
+      )
+    )
       throw new Error('Publication body contains a private source or native receipt')
 
     if (run.config.prd?.path) {
-      const prd = await readFile(resolve(this.root, run.config.prd.path), 'utf8')
+      const prd = canonicalPublicationText(
+        await readFile(resolve(this.root, run.config.prd.path), 'utf8')
+      )
       const normalize = (value: string) => value.replace(/\s+/g, ' ').trim()
-      const contract = normalize(`${run.source.issue.body} ${run.source.spec?.body ?? ''}`)
-      const normalized = normalize(body)
+      const contract = normalize(
+        canonicalPublicationText(`${run.source.issue.body} ${run.source.spec?.body ?? ''}`)
+      )
+      const normalized = normalize(decoded)
       const excerpts = prd
         .split(/[\n.!?]/)
         .map(normalize)
@@ -820,12 +881,6 @@ export class LocalWorkflowRuntime implements WorkflowPorts {
     await this.assertPublic(run, body)
     const repo = await this.repo(run)
 
-    if (run.publication.pushedCommit !== run.commit) {
-      await this.command(['git', 'push', '--set-upstream', 'origin', run.branch], run.worktree)
-      run.publication.pushedCommit = run.commit
-      await persist()
-    }
-
     const lookup = [
       'gh',
       'pr',
@@ -844,6 +899,25 @@ export class LocalWorkflowRuntime implements WorkflowPorts {
       isDraft: boolean
       headRefOid: string
     }[]
+
+    if (
+      existing[0] &&
+      !existing[0].isDraft &&
+      (existing[0].headRefOid !== run.commit || !run.publication.ready)
+    ) {
+      await this.command(['gh', 'pr', 'ready', existing[0].url, '--undo', '--repo', repo])
+      existing[0].isDraft = true
+      delete run.publication.ready
+      await persist()
+    }
+
+    if (run.publication.pushedCommit !== run.commit) {
+      await this.command(['git', 'push', '--set-upstream', 'origin', run.branch], run.worktree)
+      run.publication.pushedCommit = run.commit
+      await persist()
+      existing = JSON.parse(await this.command(lookup))
+    }
+
     const bodyFile = join(directory, 'pr.md')
 
     await writeFile(bodyFile, body, { mode: 0o600 })
@@ -875,8 +949,18 @@ export class LocalWorkflowRuntime implements WorkflowPorts {
 
     if (!pr || pr.headRefOid !== run.commit) throw new Error('PR head differs from verified commit')
 
+    const bodyDigest = digest(body)
+
+    if (run.publication.prBodyDigest !== bodyDigest || run.publication.prUrl !== pr.url) {
+      await this.command(['gh', 'pr', 'edit', pr.url, '--repo', repo, '--body-file', bodyFile])
+      run.publication.prBodyDigest = bodyDigest
+      run.publication.prBodyCommit = run.commit
+    }
+
     run.publication.prUrl = pr.url
-    await this.command(['gh', 'pr', 'edit', pr.url, '--repo', repo, '--body-file', bodyFile])
+
+    if (pr.isDraft) run.publication.draftCommit = run.commit
+
     await persist()
 
     return pr
@@ -1092,7 +1176,7 @@ export class LocalWorkflowRuntime implements WorkflowPorts {
           status?: string
         }[]
       }
-      const required = run.config.requiredChecks ?? ['test']
+      const required = [...new Set(['test', ...(run.config.requiredChecks ?? [])])]
       const successful = (check: (typeof checks.statusCheckRollup)[number]) =>
         (check.conclusion ?? check.state) === 'SUCCESS' &&
         (!check.status || check.status === 'COMPLETED')
