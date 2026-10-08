@@ -29,6 +29,7 @@ test('publication rejects local resource URI variants before any public command'
       'file:///Users/example/private-session.jsonl',
       'FiLe:///Users/example/private-session.jsonl',
       'file%3A%2F%2F%2FUsers%2Fexample%2Fprivate-session.jsonl',
+      '100% complete; file%3A%2F%2F%2FUsers%2Fexample%2Fprivate-session.jsonl',
       'file:notes/private.json',
       'file:///C:/Users/example/private-session.jsonl',
       'vscode://file/Users/example/private-session.jsonl',
