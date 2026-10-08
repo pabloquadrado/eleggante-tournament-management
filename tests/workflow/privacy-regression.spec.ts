@@ -46,6 +46,7 @@ test('publication rejects local resource URI variants before any public command'
         /local path|private source|local resource/
       )
     }
+
     assert.equal(publicCommands, 0)
   } finally {
     await context.cleanup()

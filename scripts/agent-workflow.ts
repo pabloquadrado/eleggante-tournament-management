@@ -5,7 +5,13 @@ import { WorkflowController } from './agent-workflow/controller.ts'
 import { FileRunStore } from './agent-workflow/store.ts'
 import { LocalWorkflowRuntime, safeReportPath } from './agent-workflow/runtime.ts'
 import { modelFor, profiles, roles } from './agent-workflow/models.ts'
-import type { WorkflowConfig, Stage, RunState, GateEvidence } from './agent-workflow/contracts.ts'
+import type {
+  WorkflowConfig,
+  Stage,
+  RunState,
+  GateEvidence,
+  WorkflowPorts,
+} from './agent-workflow/contracts.ts'
 
 export const help = `Portable implementation workflow (native harness dispatch)
 
@@ -30,7 +36,11 @@ publish publishes the approved development plan first; final publish pushes the 
 branch, posts review and retrospective, creates a draft PR, then marks it ready once
 required checks including coverage pass. The Owner alone merges.`
 
-export async function runCli(args: string[], root = process.cwd()) {
+export async function runCli(
+  args: string[],
+  root = process.cwd(),
+  ports: WorkflowPorts = new LocalWorkflowRuntime(root)
+) {
   const command = args[0]
   const positional: string[] = []
   const options = new Map<string, string | boolean>()
@@ -77,7 +87,7 @@ export async function runCli(args: string[], root = process.cwd()) {
     )
 
   const store = new FileRunStore(resolve(root, '.agent-workflow/runs'))
-  const controller = new WorkflowController(store, new LocalWorkflowRuntime(root))
+  const controller = new WorkflowController(store, ports)
   const requireCount = (count: number) => {
     if (positional.length !== count)
       throw new Error(`Invalid arguments for ${command}; run workflow help`)
@@ -107,7 +117,7 @@ export async function runCli(args: string[], root = process.cwd()) {
       config.prd = {
         path: String(options.get('--prd') ?? config.prd?.path ?? ''),
         locator: String(options.get('--prd-locator') ?? config.prd?.locator ?? ''),
-        approved: options.has('--approved-prd') ? true : Boolean(config.prd?.approved),
+        approved: options.has('--approved-prd') ? true : config.prd?.approved === true,
       }
 
     if (config.prd?.path) config.prd.path = resolve(root, config.prd.path)

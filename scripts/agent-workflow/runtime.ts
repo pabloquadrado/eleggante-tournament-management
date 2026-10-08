@@ -272,7 +272,42 @@ export class LocalWorkflowRuntime implements WorkflowPorts {
 
   private async repository(config: WorkflowConfig, input?: string) {
     const origin = await this.command(['git', 'remote', 'get-url', 'origin'])
-    const repo = githubRepository(origin)
+    let canonicalOrigin = origin.replace(/^([\w.-]+)@([\w.-]+):/, 'ssh://$1@$2/')
+
+    if (canonicalOrigin.startsWith('ssh://')) {
+      let address: URL
+
+      try {
+        address = new URL(canonicalOrigin)
+      } catch {
+        throw new Error(repositoryMismatch)
+      }
+
+      if (address.hostname.toLowerCase() !== 'github.com') {
+        if (!/^[a-zA-Z0-9][\w.-]*$/.test(address.hostname)) throw new Error(repositoryMismatch)
+
+        const resolved = await this.commands.execute(
+          ['ssh', '-G', address.hostname],
+          this.root,
+          10000
+        )
+        const hostnames = resolved.stdout
+          .split(/\r?\n/)
+          .flatMap((line) => /^hostname\s+(\S+)\s*$/i.exec(line)?.slice(1) ?? [])
+
+        if (
+          resolved.exitCode !== 0 ||
+          hostnames.length !== 1 ||
+          hostnames[0].toLowerCase() !== 'github.com'
+        )
+          throw new Error(repositoryMismatch)
+
+        address.hostname = 'github.com'
+        canonicalOrigin = address.toString()
+      }
+    }
+
+    const repo = githubRepository(canonicalOrigin)
 
     if (
       (config.repo && config.repo.toLowerCase() !== repo) ||
@@ -357,7 +392,7 @@ export class LocalWorkflowRuntime implements WorkflowPorts {
           references.push({ locator: `${baseSha}:${file.path}`, digest: file.sha })
       }
 
-      if (!config.prd?.approved || !config.prd.path || !config.prd.locator)
+      if (config.prd?.approved !== true || !config.prd.path || !config.prd.locator)
         blockers.push('Approved PRD is unavailable; configure its approved locator and local file')
       else {
         try {
@@ -715,10 +750,38 @@ export class LocalWorkflowRuntime implements WorkflowPorts {
   }
 
   private async assertPublic(run: RunState, body: string) {
+    let decoded = body
+    let previous = ''
+
+    while (decoded !== previous) {
+      previous = decoded
+      decoded = decoded.replace(/%([\da-f]{2})/gi, (_match, hex: string) =>
+        String.fromCharCode(Number.parseInt(hex, 16))
+      )
+    }
+
+    const urls = decoded.match(/\bhttps?:\/\/[^\s<>"'`)]+/gi) ?? []
+    const localUrl = urls.some((value) => {
+      try {
+        const hostname = new URL(value).hostname.toLowerCase().replace(/\.$/, '')
+
+        return (
+          hostname === 'localhost' ||
+          hostname.endsWith('.localhost') ||
+          /^127\.\d+\.\d+\.\d+$/.test(hostname) ||
+          ['0.0.0.0', '[::]', '[::1]'].includes(hostname)
+        )
+      } catch {
+        return false
+      }
+    })
+
     if (
-      /(?:^|[\s("'`])(?:\/(?:Users|private|tmp|home|var|etc)\/|[A-Za-z]:[\\/])/.test(body) ||
+      localUrl ||
+      /\b(?:file|vscode(?:-[\w-]+)?)\s*:/i.test(decoded) ||
+      /(?:^|[\s("'`])(?:\/(?:Users|private|tmp|home|var|etc)\/|[A-Za-z]:[\\/])/.test(decoded) ||
       /\b(?:sk-[a-zA-Z0-9_-]{12,}|gh[pousr]_[a-zA-Z0-9]{20,}|(?:password|api[_ -]?key|access[_ -]?token)\s*[:=]\s*\S+)/i.test(
-        body
+        decoded
       )
     )
       throw new Error('Publication body contains a local path or secret-like value')
