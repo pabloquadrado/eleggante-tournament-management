@@ -13,6 +13,7 @@ tmp/*
 !.env.*.example
 .envrc
 .direnv/
+.agent-workflow/
 .npmrc
 .pypirc
 .aws/

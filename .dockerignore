@@ -1,6 +1,8 @@
 node_modules
 .adonisjs
 .env
+.env.*
 .git
+.agent-workflow
 tmp
 build

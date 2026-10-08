@@ -1,5 +1,9 @@
 ## Agent skills
 
+### Implementation workflow
+
+For `/implement` or `$implement`, read `.agents/skills/implement/SKILL.md` and `docs/agents/implementation-workflow.md`. Use isolated role agents and the repository controller for refinement, planning, implementation, QA, review, retrospective, questions, and delivery.
+
 ### Issue tracker
 
 Issues and specs live in GitHub Issues; every new issue is also added to Project #1 “Eleggante Tournament Management”. See `docs/agents/issue-tracker.md`.
