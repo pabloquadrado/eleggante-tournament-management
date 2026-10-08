@@ -1,7 +1,9 @@
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from '@japa/runner'
+import { runCli } from '../../scripts/agent-workflow.ts'
 import { LocalWorkflowRuntime } from '../../scripts/agent-workflow/runtime.ts'
+import type { WorkflowConfig } from '../../scripts/agent-workflow/contracts.ts'
 import { fixture } from './support.ts'
 
 test('only a literal boolean approval assertion can unlock an accessible private source', async ({
@@ -59,6 +61,59 @@ test('only a literal boolean approval assertion can unlock an accessible private
     assert.isTrue(
       approved.references.some((reference) => reference.locator === 'private-test-locator')
     )
+  } finally {
+    await context.cleanup()
+  }
+})
+
+test('CLI private-source flag merging preserves only literal approval or an explicit approval flag', async ({
+  assert,
+}) => {
+  const context = await fixture()
+  const observed: WorkflowConfig[] = []
+
+  try {
+    const ports = {
+      ...context.ports,
+      sources: {
+        snapshot: async (issue: string, config: WorkflowConfig) => {
+          observed.push(config)
+
+          return context.ports.sources.snapshot(issue, config)
+        },
+      },
+    }
+    const configPath = join(context.directory, '.agent-workflow/config.json')
+    const scenarios = [
+      { approval: 'false', flags: ['--prd', 'private-source.md'], expected: false },
+      { approval: 'false', flags: ['--prd-locator', 'private-test-locator'], expected: false },
+      { approval: true, flags: ['--prd', 'private-source.md'], expected: true },
+      {
+        approval: 'false',
+        flags: ['--prd', 'private-source.md', '--approved-prd'],
+        expected: true,
+      },
+    ]
+
+    for (const scenario of scenarios) {
+      await writeFile(
+        configPath,
+        JSON.stringify({
+          profile: 'openai',
+          prd: {
+            path: 'private-source.md',
+            locator: 'private-test-locator',
+            approved: scenario.approval,
+          },
+        })
+      )
+      await runCli(['start', '4', '--dry-run', ...scenario.flags], context.directory, ports)
+      assert.strictEqual(observed.at(-1)?.prd?.approved, scenario.expected)
+    }
+
+    assert.equal(observed.length, scenarios.length)
+    assert.deepEqual(await context.store.list(), [context.run.id])
+    assert.equal(context.publications(), 0)
   } finally {
     await context.cleanup()
   }
