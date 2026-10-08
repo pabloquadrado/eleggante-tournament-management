@@ -14,6 +14,20 @@ Finish the portable `/implement` command, isolated role agents, deterministic co
 
 Read `AGENTS.md`, `docs/agents/implementation-workflow.md`, and the relevant role document before work. All shell commands use `rtk`. Use Node 24+ and Git with explicit-base `merge-tree` support. Local paths and preserved artifacts are indexed in the gitignored `.agent-workflow/checkpoints/2026-10-07/state.json`.
 
+## Copy-paste prompt for the next session
+
+```text
+Continue the portable /implement workflow work in this repository from the durable handoff at docs/agents/implementation-workflow-handoff.md and the checkpoint at .agent-workflow/checkpoints/2026-10-07/state.json.
+
+Do not implement issue #4. Work on branch feat/portable-implement-workflow and preserve PR #37 as draft. Read AGENTS.md, the handoff, docs/agents/implementation-workflow.md, and the relevant role documents before editing. Use rtk for every shell command, Node 24+, and Git with --merge-base support.
+
+The Owner-approved order is: Engineer → both independent reviews (parallel allowed) → QA → retrospective → ready PR. Any review or QA finding loops back through Engineer, fresh engineering checks, both reviews, and fresh QA. QA final validation must not overlap review.
+
+First inspect the current dirty worktree and the preserved review/QA evidence. Finish the controller and test migration to this order, fix the known regression-test lint errors, add the bounded integration and PR-draft proofs, then run the complete local gates. Freeze and push a clean candidate, obtain originating Standards and Spec review closure, run fresh Docker QA with per-file 100% coverage and meaningful assertions, run the retrospective, update the PR body, and mark the PR ready only after the exact-head test check passes. Never merge. Preserve repair counters and ask the Owner when a product decision or approved PRD access is required.
+
+Do not claim completion from the old 44 workflow / 67 application test evidence or the old 6b candidate; final validation is still pending.
+```
+
 ## Latest Owner decision
 
 **Refine → Plan → Engineer → both reviews → QA → Retrospective → Ready PR.** Any review or QA finding returns to Engineer, then fresh engineering checks, both reviews, and fresh QA. QA final validation cannot overlap review. The two independent review modes may run together. QA may prepare scenarios during implementation.
