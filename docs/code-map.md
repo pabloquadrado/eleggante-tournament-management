@@ -13,6 +13,8 @@ flowchart TD
   root --> startup[start/ and config/]
   root --> tests[tests/]
   root --> docs[docs/]
+  root --> tooling[scripts/: developer tools]
+  root --> harnesses[.agents/, .claude/, .codex/, .opencode/: shared skill and native registrations]
   app --> edges[controllers/, jobs/, middleware/, exceptions/]
   app --> models[models/: framework auth model]
   app --> modules[modules/]
@@ -40,6 +42,10 @@ flowchart TD
   database --> migrations[migrations/, seeders/, schema.ts]
   tests --> suites[unit/, integration/, functional/, support/]
   docs --> rules[agents/architecture.md: permanent rules]
+  docs --> roles[agents/roles/: implementation role instructions]
+  tooling --> workflow[agent-workflow/: state, sources, gates and publication]
+  tooling --> adapters[workflow-adapters.ts: native registration generation and diagnostics]
+  tests --> toolTests[workflow/ and workflow-adapters/: isolated developer-tool tests]
 ```
 
 ## Runtime flow
@@ -90,6 +96,25 @@ Use cases and shared application services import domain rules and contracts. Inf
 `app/models/user.ts` is the Adonis authentication adapter model, not a domain object. Framework authentication and session middleware integrate with their configured stores at the edge. Business persistence stays in the module infrastructure. Database migrations and seeders own schema and development fixtures.
 
 The outer use case owns the unit of work. Shared OTP creation, consumption, profile-update, and phone-change services participate through its transaction-bound repositories. Profile changes, OTP state, sessions, outbox intent, replay results, and audit events retain their atomic writes. Invalid OTP attempts are committed before the use case returns a denial. Email delivery uses a separate transaction and locks challenge before outbox; it does not hold the global identity write lock while waiting for SMTP. Verification activates the browser session only after the identity transaction commits.
+
+## Developer workflow
+
+Developer orchestration is tooling outside the product domain. Its controller consumes focused source, Git, verification, and publication contracts; subprocess/filesystem adapters implement those contracts. It has no provider SDK or application-domain dependency. The native harness executes isolated roles using shared documents and passes reports to the controller.
+
+```mermaid
+flowchart LR
+  command[Native implement command or shared skill] --> coordinator[Coordinator agent]
+  coordinator --> controller[Repository workflow controller]
+  controller --> state[Local gitignored run state and evidence]
+  controller --> sources[GitHub issue/spec and private PRD references]
+  controller --> gates[Build, types, architecture, tests and coverage]
+  coordinator --> agents[Tech Lead, Engineer, QA, reviewers and Delivery Lead]
+  agents --> reports[Commit-bound reports and isolated test patches]
+  reports --> controller
+  controller --> delivery[Issue plan, draft PR and ready review]
+  owner[Owner] -->|Answers| coordinator
+  delivery -->|Review and merge| owner
+```
 
 ## Verification
 

@@ -1,5 +1,5 @@
 interface:
-  display_name: "Implement"
-  short_description: "Build work from a spec or tickets"
+  display_name: 'Implement'
+  short_description: 'Refine, build, validate, and deliver an issue'
 policy:
   allow_implicit_invocation: false

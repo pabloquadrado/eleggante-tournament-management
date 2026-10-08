@@ -35,15 +35,15 @@ The V1 target covers EA FC tournaments, in person and online. It does not includ
 
 ## Stack & Architecture
 
-| Area            | Current code                                                                                                                  | Planned direction from issue #1                                                |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Application     | Node.js 24, TypeScript, AdonisJS 7, Inertia/React, Vite                                                                       | One web application with public and administrative areas                       |
-| Data            | PostgreSQL 16 with Lucid migrations                                                                                           | Transactional source of truth for tournament state and history                 |
+| Area            | Current code                                                                                                                 | Planned direction from issue #1                                                |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Application     | Node.js 24, TypeScript, AdonisJS 7, Inertia/React, Vite                                                                      | One web application with public and administrative areas                       |
+| Data            | PostgreSQL 16 with Lucid migrations                                                                                          | Transactional source of truth for tournament state and history                 |
 | Code boundaries | Identity and tournament modules with domain, application interfaces, and infrastructure; injected HTTP and queue entrypoints | Domain and application rules independent of framework and persistence adapters |
 | Background work | Database-backed worker recovers and delivers committed OTP emails                                                            | Transactional outbox and operational email delivery                            |
-| Local tooling   | Docker Compose, PostgreSQL, Mailpit                                                                                           | SMTP delivers operational sign-in and phone-change codes to local Mailpit     |
-| Tests           | Japa unit, HTTP/PostgreSQL integration, and Chromium functional suites; c8 and browser instrumentation enforce coverage       | Extend behavior and security tests as each V1 workflow is built                |
-| Production      | No production deployment is documented in this repository                                                                     | Coolify-managed containers and observability, subject to deployment checks     |
+| Local tooling   | Docker Compose, PostgreSQL, Mailpit                                                                                          | SMTP delivers operational sign-in and phone-change codes to local Mailpit      |
+| Tests           | Japa unit, HTTP/PostgreSQL integration, and Chromium functional suites; c8 and browser instrumentation enforce coverage      | Extend behavior and security tests as each V1 workflow is built                |
+| Production      | No production deployment is documented in this repository                                                                    | Coolify-managed containers and observability, subject to deployment checks     |
 
 The technical spec calls for SOLID, Object Calisthenics by default, an object-oriented domain where practical, Clean Architecture boundaries, and TDD. Application operations have one use-case class with `execute(input)`; controllers and jobs supply plain input, and use cases own authorization and transaction coordination. Shared application services reuse workflow steps within the outer transaction; domain objects and policies own business rules. Repository interfaces isolate persistence; `providers/module-bindings-provider.ts` wires use cases, services, and concrete adapters. See the [Mermaid folder and system maps](docs/code-map.md) and [permanent architecture rules](docs/agents/architecture.md). Source imports use `.ts` or `.tsx`; the production build emits JavaScript.
 
@@ -77,6 +77,12 @@ The coverage gate requires 100% statements, branches, functions, and lines per c
 
 The commit hook scans staged changes with Gitleaks. CI scans Git history on every pull request.
 
+## Agent implementation workflow
+
+Use `/implement <issue>` in Claude Code or OpenCode, or `$implement <issue>` in Codex. The shared workflow refines the issue against current code and approved sources, writes the development plan, then delegates engineering, independent QA, code review, and retrospective before delivering a ready PR. Unresolved questions pause dependent work; the Owner alone merges.
+
+The provider-independent controller keeps resumable state and verification evidence locally. Native adapters register the command and role agents without duplicating their instructions. See [Implementation workflow and setup](docs/agents/implementation-workflow.md). Configure private PRD access and supported model settings before a normal run; `npm run workflow -- start 4 --dry-run` previews blockers without implementing issue #4.
+
 ## Configuration
 
 Copy [`.env.example`](.env.example) for local development. `start/env.ts` validates the application variables.
@@ -88,7 +94,7 @@ Copy [`.env.example`](.env.example) for local development. `start/env.ts` valida
 | `APP_NAME`                                                    | Name used in application logs; the example uses `Arena Eleggante`                             |
 | `APP_KEY`                                                     | Generate locally with `node ace generate:key`; do not commit the value                        |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_DATABASE` | PostgreSQL connection; Compose uses `database:5432` and `arena_dev`                           |
-| `SESSION_DRIVER`                                              | `database` in development, tests, and CI; two-hour inactivity lifetime                                                              |
+| `SESSION_DRIVER`                                              | `database` in development, tests, and CI; two-hour inactivity lifetime                        |
 | `QUEUE_DRIVER`                                                | `database` locally; `sync` in CI                                                              |
 | `LOG_LEVEL`                                                   | Application log level; the example uses `info`                                                |
 | `TZ`                                                          | Container time zone setting; the example uses `UTC`. V1 displays dates in `America/Sao_Paulo` |

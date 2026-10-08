@@ -3,7 +3,7 @@ import { react } from '@adonisjs/eslint-config/react'
 
 export default [
   ...configApp(...react),
-  { ignores: ['database/schema.ts', 'public/assets/**'] },
+  { ignores: ['database/schema.ts', 'public/assets/**', '.agent-workflow/**'] },
   {
     rules: {
       '@unicorn/filename-case': ['error', { cases: { kebabCase: true } }],
