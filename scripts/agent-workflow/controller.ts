@@ -4,10 +4,12 @@ import { modelFor } from './models.ts'
 import type { Role } from './models.ts'
 import { stages, stageRoles, validateReport } from './contracts.ts'
 import type {
+  ModelUsage,
   NextResult,
   RoleReport,
   RunState,
   Stage,
+  UsageSession,
   WorkflowConfig,
   WorkflowPorts,
 } from './contracts.ts'
@@ -74,6 +76,10 @@ export class WorkflowController {
   private invalidate(run: RunState, from: Stage) {
     for (const stage of stages.slice(stages.indexOf(from))) delete run.reports[stage]
 
+    // Repairs only apply to the candidate that produced the failed gate.
+    // Source or commit invalidation must recompute from the first missing stage.
+    delete run.repair
+
     if (stages.indexOf(from) <= stages.indexOf('implementation')) delete run.gates.engineering
 
     if (stages.indexOf(from) <= stages.indexOf('qa')) {
@@ -118,6 +124,18 @@ export class WorkflowController {
       run.events.push({
         at: new Date().toISOString(),
         action: 'Source changed; refinement and downstream evidence invalidated',
+      })
+    }
+
+    if (
+      run.repair &&
+      (!run.reports.refinement?.passed || !run.reports.plan?.passed)
+    ) {
+      delete run.repair
+      run.events.push({
+        at: new Date().toISOString(),
+        action:
+          'Stale repair marker cleared because refinement or plan evidence is missing; resume will continue from the first incomplete stage',
       })
     }
 
@@ -250,6 +268,7 @@ export class WorkflowController {
               available: false,
               sessionId: 'REPLACE_WITH_NATIVE_SESSION_ID',
               evidence: 'REPLACE_WITH_NATIVE_RECEIPT_REFERENCE',
+              usage: null,
             },
             summary: 'REPLACE_WITH_ROLE_RESULT',
             publicSummary: 'REPLACE_WITH_PUBLIC_SAFE_RESULT',
@@ -300,7 +319,7 @@ export class WorkflowController {
             reportArtifacts: artifacts.reports,
             findings: run.findings,
             questions: run.questions,
-            instructions: `Read docs/agents/roles/${role}.md. Use native harness dispatch; do not substitute unavailable model or effort. Return the versioned report with native session receipt and evidence. Private source pointers are local and must never be copied into public summaries. Both independent reviews precede final QA verification and reporting. QA works only in the provided separate checkout and may change tests/** or inertia/tests/**; commit tests there, run npm run workflow -- verify ${id} qa, inspect the fresh evidence, then include qaCheckout and qaVerification receipts and its artifact path in evidence. Failed gates retain the checkout for QA findings; submit a failed final report before Engineer repair. Engineer integrates the complete qaIntegration delta into delivery, followed by fresh engineering, both reviews, and QA. Reviewers read the generated full diff artifact. Findings require originating-stage closure or explicit Owner-approved deferral.`,
+            instructions: `Read docs/agents/roles/${role}.md. Use native harness dispatch; do not substitute unavailable model or effort. Return the versioned report with native session receipt and evidence. Populate model.usage only with exact cumulative session usage from native telemetry and cite its evidence; use null when unavailable. Never estimate. Private source pointers are local and must never be copied into public summaries. Both independent reviews precede final QA verification and reporting. QA works only in the provided separate checkout and may change tests/** or inertia/tests/**; commit tests there, run npm run workflow -- verify ${id} qa, inspect the fresh evidence, then include qaCheckout and qaVerification receipts and its artifact path in evidence. Failed gates retain the checkout for QA findings; submit a failed final report before Engineer repair. Engineer integrates the complete qaIntegration delta into delivery, followed by fresh engineering, both reviews, and QA. Reviewers read the generated full diff artifact. Findings require originating-stage closure or explicit Owner-approved deferral.`,
             reportTemplate: template,
           }
         }),
@@ -324,8 +343,70 @@ export class WorkflowController {
     }
 
     run.repairs[gate] = round
-    run.repair = { gate, round }
     this.invalidate(run, 'implementation')
+    run.repair = { gate, round }
+  }
+
+  private rememberUsage(run: RunState, report: RoleReport) {
+    if (!report.model.available) return
+
+    const sessions = (run.usageSessions ??= [])
+    const index = sessions.findIndex(
+      (session) =>
+        session.harness === report.model.harness &&
+        session.sessionId === report.model.sessionId
+    )
+    const existing = index >= 0 ? sessions[index] : undefined
+    const incoming = report.model.usage ?? null
+
+    if (
+      existing &&
+      (existing.role !== report.role ||
+        existing.model !== report.model.effectiveModel ||
+        existing.effort !== report.model.effectiveEffort)
+    )
+      throw new Error('A native session cannot be reused across workflow roles or model settings')
+
+    const mergeMetric = (key: keyof Omit<ModelUsage, 'scope' | 'evidence'>) => {
+      const previous = existing?.usage?.[key]
+      const next = incoming?.[key]
+      return previous === undefined ? next : next === undefined ? previous : Math.max(previous, next)
+    }
+    const usage: ModelUsage | null = incoming
+      ? {
+          scope: 'session',
+          inputTokens: mergeMetric('inputTokens'),
+          cachedInputTokens: mergeMetric('cachedInputTokens'),
+          outputTokens: mergeMetric('outputTokens'),
+          reasoningTokens: mergeMetric('reasoningTokens'),
+          evidence: incoming.evidence,
+        }
+      : (existing?.usage ?? null)
+
+    if (
+      (usage?.cachedInputTokens !== undefined &&
+        usage.inputTokens !== undefined &&
+        usage.cachedInputTokens > usage.inputTokens) ||
+      (usage?.reasoningTokens !== undefined &&
+        usage.outputTokens !== undefined &&
+        usage.reasoningTokens > usage.outputTokens)
+    )
+      throw new Error('Cumulative session usage counters are inconsistent')
+
+    const session: UsageSession = {
+      harness: report.model.harness,
+      sessionId: report.model.sessionId,
+      role: report.role,
+      model: report.model.effectiveModel,
+      effort: report.model.effectiveEffort,
+      stages: [...new Set([...(existing?.stages ?? []), report.stage])],
+      usage,
+      evidence: incoming?.evidence ?? existing?.evidence ?? report.model.evidence,
+      recordedAt: new Date().toISOString(),
+    }
+
+    if (index >= 0) sessions[index] = session
+    else sessions.push(session)
   }
 
   async record(id: string, input: unknown) {
@@ -498,6 +579,8 @@ export class WorkflowController {
       )
         throw new Error('Deferral question must identify a confirmed open finding in the report')
 
+      this.rememberUsage(run, report)
+
       run.reports[report.stage] = report
       run.findings = [
         ...run.findings.filter((finding) => finding.origin !== report.stage),
@@ -546,8 +629,8 @@ export class WorkflowController {
         delete run.qaFailureRound
 
         if (run.qaIntegration) {
-          run.repair = { gate: 'qa', round: 0 }
           this.invalidate(run, 'implementation')
+          run.repair = { gate: 'qa', round: 0 }
           run.events.push({
             at: new Date().toISOString(),
             action:
@@ -740,7 +823,8 @@ export class WorkflowController {
     return this.mutate(id, async (run) => {
       if (run.escalations[role]) throw new Error(`${role} already used its one escalation`)
 
-      const target = modelFor(run.config.profile, 'tech-lead')
+      // Reviewers stay on the profile's full-strength model, including the economy pilot.
+      const target = modelFor(run.config.profile, 'reviewer')
 
       run.escalations[role] = { ...target, reason, at: new Date().toISOString() }
 

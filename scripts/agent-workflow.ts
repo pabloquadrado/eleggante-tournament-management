@@ -10,13 +10,14 @@ import type {
   Stage,
   RunState,
   GateEvidence,
+  UsageSession,
   WorkflowPorts,
 } from './agent-workflow/contracts.ts'
 
 export const help = `Portable implementation workflow (native harness dispatch)
 
 npm run workflow -- start <issue-number|issue-url> [--dry-run] [--config path]
-  [--profile openai|anthropic] [--engineer kimi-k3]
+  [--profile openai|openai-economy|anthropic] [--engineer kimi-k3]
   [--prd path --prd-locator locator --approved-prd]
 npm run workflow -- next <run-id>
 npm run workflow -- record <run-id> <report-path>
@@ -197,6 +198,49 @@ export async function runCli(
   throw new Error(`Unknown command: ${command}; run workflow help`)
 }
 
+function usageSummary(sessions: UsageSession[] = []) {
+  const groups = new Map<string, UsageSession[]>()
+
+  for (const session of sessions) {
+    const key = JSON.stringify([session.role, session.model, session.effort])
+    const group = groups.get(key) ?? []
+    group.push(session)
+    groups.set(key, group)
+  }
+
+  const metric = (
+    group: UsageSession[],
+    key: 'inputTokens' | 'cachedInputTokens' | 'outputTokens' | 'reasoningTokens'
+  ) => {
+    const values = group.flatMap((session) => {
+      const value = session.usage?.[key]
+      return value === undefined ? [] : [value]
+    })
+
+    return {
+      sessions: values.length,
+      totalTokens: values.reduce((total, value) => total + value, 0),
+    }
+  }
+
+  return {
+    sessions: sessions.length,
+    measuredSessions: sessions.filter((session) => session.usage !== null).length,
+    unmeasuredSessions: sessions.filter((session) => session.usage === null).length,
+    byRole: [...groups.values()].map((group) => ({
+      role: group[0].role,
+      model: group[0].model,
+      effort: group[0].effort,
+      sessions: group.length,
+      measuredSessions: group.filter((session) => session.usage !== null).length,
+      input: metric(group, 'inputTokens'),
+      cachedInput: metric(group, 'cachedInputTokens'),
+      output: metric(group, 'outputTokens'),
+      reasoning: metric(group, 'reasoningTokens'),
+    })),
+  }
+}
+
 export function displayResult(result: unknown, full = false): unknown {
   if (full || !result || typeof result !== 'object') return result
 
@@ -270,6 +314,7 @@ export function displayResult(result: unknown, full = false): unknown {
     repair: run.repair,
     repairRounds: run.repairs,
     escalations: run.escalations,
+    usage: usageSummary(run.usageSessions),
     requestedCoordinator: run.escalations.coordinator
       ? { model: run.escalations.coordinator.model, effort: run.escalations.coordinator.effort }
       : modelFor(run.config.profile, 'coordinator'),
