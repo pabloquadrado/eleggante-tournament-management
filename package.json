@@ -75,6 +75,7 @@
     "youch": "^4.1.1"
   },
   "dependencies": {
+    "@adonisjs/ally": "6.3.2",
     "@adonisjs/auth": "^10.1.0",
     "@adonisjs/core": "^7.5.2",
     "@adonisjs/cors": "^3.0.0",
@@ -88,6 +89,7 @@
     "@adonisjs/vite": "^6.0.2",
     "@inertiajs/core": "^3.7.1",
     "@inertiajs/react": "^3.7.1",
+    "@poppinss/oauth-client": "7.2.0",
     "@vinejs/vine": "^4.4.0",
     "edge.js": "^6.5.1",
     "lucide-react": "^1.48.0",

@@ -48,7 +48,7 @@ export class PostgresPlayerRepository implements PlayerRepository {
       .onConflict('email')
       .ignore()
       .returning('id')
-    const row = await this.client.from('users').where('email', email).firstOrFail()
+    const row = await this.client.from('users').where('email', email).forUpdate().firstOrFail()
 
     return { player: playerRecord(row), created: inserted.length > 0 }
   }

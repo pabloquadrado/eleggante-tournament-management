@@ -38,6 +38,9 @@ class UnexpectedWork extends IdentityUnitOfWork {
 }
 
 class UnexpectedQueries extends IdentityQueries {
+  async googleAttempt(): Promise<never> {
+    throw new Error('Unexpected Google attempt query')
+  }
   async player(): Promise<never> {
     throw new Error('A denied caller must not read private data')
   }
@@ -123,6 +126,9 @@ test('own-profile reads deny a persisted deactivation after the actor was authen
   let reads = 0
   // Use the contract directly so this models a change between authentication and the read.
   const queries: IdentityQueries = {
+    googleAttempt: async () => {
+      throw new Error('Unexpected Google attempt query')
+    },
     async player() {
       reads++
 

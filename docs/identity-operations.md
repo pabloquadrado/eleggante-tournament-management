@@ -1,22 +1,38 @@
 # Identity operations
 
-Email sign-in and own-profile onboarding are implemented by issue #3. Google sign-in, versioned consent, organization permissions, and the first Platform Admin bootstrap belong to later stories. The production consent policy denies unrestricted access until #5 supplies current-document acceptance; there is no shared administrator seed or consent bypass.
+Email sign-in and own-profile onboarding are implemented by issue #3; issue #4 adds Google sign-in to the same player account. Versioned consent, organization permissions, and the first Platform Admin bootstrap belong to later stories. The production consent policy denies unrestricted access until #5 supplies current-document acceptance; there is no shared administrator seed or consent bypass.
 
 ## Local delivery and configuration
 
 Run `docker compose up -d app worker`. Open `/sign-in` on port 3333 and read the code in Mailpit on port 8025. The worker schedules outbox recovery before starting queue processing. Request handling only saves the challenge and delivery intent; SMTP runs in the worker.
 
-| Setting | Purpose |
-| --- | --- |
-| `SESSION_DRIVER=database` | PostgreSQL session storage in development, tests, and CI |
-| `QUEUE_DRIVER` | `database` for the worker; `sync` in isolated tests |
-| `SMTP_HOST` | Local `mail` service, or the production SMTP host |
-| `SMTP_PORT` | Local port 1025; the provider's port in production |
-| `SMTP_SECURE` | Whether the transport uses TLS immediately; follow the provider's settings |
-| `SMTP_FROM` | Sender address; production must use an authorized sender |
-| `SMTP_USERNAME`, `SMTP_PASSWORD` | Optional provider credentials, supplied as private environment variables |
+| Setting                                    | Purpose                                                                         |
+| ------------------------------------------ | ------------------------------------------------------------------------------- |
+| `SESSION_DRIVER=database`                  | PostgreSQL session storage in development, tests, and CI                        |
+| `QUEUE_DRIVER`                             | `database` for the worker; `sync` in isolated tests                             |
+| `SMTP_HOST`                                | Local `mail` service, or the production SMTP host                               |
+| `SMTP_PORT`                                | Local port 1025; the provider's port in production                              |
+| `SMTP_SECURE`                              | Whether the transport uses TLS immediately; follow the provider's settings      |
+| `SMTP_FROM`                                | Sender address; production must use an authorized sender                        |
+| `SMTP_USERNAME`, `SMTP_PASSWORD`           | Optional provider credentials, supplied as private environment variables        |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Google web OAuth client credentials; both are required                 |
+| `APP_URL`                                  | Trusted application origin used to derive the exact `/auth/google/callback` URL |
 
 The app key protects encrypted delivery material and keyed lookup/code verifiers. Store it privately and consistently across app and worker. Arbitrary forwarded IP headers are not trusted: request limits use the direct connection IP. A reverse-proxy deployment must review that boundary before relying on per-client IP limits.
+
+## Google sign-in
+
+Provision a Google OAuth client of type **Web application** in the organization's private Google project. Configure its consent screen and authorized test users as required by that project's publication status. Register the exact redirect URI derived from `APP_URL`: for the local template it is `http://localhost:3333/auth/google/callback`; production uses the deployed HTTPS origin. Supply the client ID and secret through private environment configuration and restart the app. Do not commit credentials or personal test accounts. The callback origin comes from trusted configuration, never request headers or callback input.
+
+If either credential is missing, `Entrar com Google` returns to a clean sign-in page with pt-BR recovery and the email-code option; no Google attempt or authenticated session is created. Deterministic tests substitute only the external provider transport while exercising the real Ally 6.3.2 driver, HTTP endpoints, PostgreSQL sessions and Chromium. A live Google smoke test additionally requires privately supplied authorized credentials and a test account.
+
+The request-scoped Ally adapter requests only `openid email` with online access and pt-BR locale. A ten-minute durable attempt owns random state, browser binding and the S256 verifier. The callback checks those values and pending status before code exchange; the final identity transaction rechecks them and account eligibility, attaches the subject, consumes the attempt, appends minimal audit references, and rotates the session atomically. Provider I/O occurs outside the identity write lock. All token and userinfo requests use fixed trusted Google endpoints, reject redirects, and have a five-second timeout. Identity proof comes exclusively from trusted online userinfo with a valid subject and raw boolean `email_verified === true`; returned ID tokens are discarded.
+
+The same normalized verified email resolves the same player account and immutable Arena Eleggante ID. Subjects remain case-sensitive, and Gmail dot/plus variants are not rewritten. A linked subject with a changed email, or an inactive/anonymized player, is denied without moving the association or changing the account. Google names, pictures and tokens are discarded; sign-in preserves profile fields, versions and consent records. Google authorization grants no Arena document acceptance or administrative permission.
+
+Start and callback responses use `no-store` and `no-referrer`, and redirect to clean application URLs. Configure reverse-proxy/access logs and monitoring to omit query strings for `/auth/google` and `/auth/google/callback`; do not collect callback URLs, authorization headers, provider bodies or encrypted attempt material. Identity exception logs omit diagnostics and audits contain only opaque references. The adapter fails closed when `NODE_DEBUG` enables OAuth/Ally namespaces or wildcard debugging. Keep those settings disabled in deployment and diagnostics. Ally cookie-state and `.stateless()` convenience authentication are not used; the application owns browser binding and one-use state.
+
+Terminal and expired attempts erase state/verifier material, and retention deletes expired attempt records after twenty-four hours. A failed transaction preserves the prior session and rolls back account, association, audit and attempt consumption. If the provider code was already exchanged, begin a fresh Google attempt or use email-code sign-in.
 
 ## Codes, sessions, and profiles
 

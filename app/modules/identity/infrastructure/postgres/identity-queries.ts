@@ -1,8 +1,18 @@
 import db from '@adonisjs/lucid/services/db'
 import { IdentityQueries } from '../../application/ports/identity-repositories.ts'
 import { playerRecord } from './player-repository.ts'
+import { googleAttemptRecord } from './google-attempt-repository.ts'
 
 export class PostgresIdentityQueries extends IdentityQueries {
+  async googleAttempt(stateKey: string, browserKey: string) {
+    const row = await db
+      .from('google_auth_attempts')
+      .where('state_key', stateKey)
+      .where('browser_key', browserKey)
+      .first()
+
+    return row ? googleAttemptRecord(row) : null
+  }
   async player(id: string) {
     return playerRecord(await db.from('users').where('id', id).firstOrFail())
   }

@@ -3,10 +3,11 @@ import { type HttpContext, ExceptionHandler } from '@adonisjs/core/http'
 import type { StatusPageRange, StatusPageRenderer } from '@adonisjs/core/types/http'
 import { IdentityError } from '../modules/identity/domain/identity-error.ts'
 import { errors as shieldErrors } from '@adonisjs/shield'
+import { googleSignInFeedback } from '../presentation/google-sign-in-feedback.ts'
 
 export default class HttpExceptionHandler extends ExceptionHandler {
   private isIdentityRequest(ctx: HttpContext) {
-    return /^(\/api\/v1\/(auth|me|onboarding)|\/sign-in|\/onboarding|\/me)(\/|$)/.test(
+    return /^(\/api\/v1\/(auth|me|onboarding)|\/auth\/google|\/sign-in|\/onboarding|\/me)(\/|$)/.test(
       ctx.request.url()
     )
   }
@@ -37,6 +38,14 @@ export default class HttpExceptionHandler extends ExceptionHandler {
    * response to the client
    */
   async handle(error: unknown, ctx: HttpContext) {
+    if (ctx.request.url().startsWith('/auth/google')) {
+      ctx.response.header('cache-control', 'no-store')
+      ctx.response.header('referrer-policy', 'no-referrer')
+      ctx.session.flash('googleFeedback', googleSignInFeedback.failed)
+
+      return ctx.response.redirect('/sign-in', false)
+    }
+
     if (error instanceof shieldErrors.E_BAD_CSRF_TOKEN) {
       return ctx.response.forbidden({
         errors: {

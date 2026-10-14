@@ -13,6 +13,9 @@ import { ReadPlayerProfileUseCase } from '../modules/identity/application/use-ca
 import { UpdatePlayerProfileUseCase } from '../modules/identity/application/use-cases/update-player-profile-use-case.ts'
 import { ConfirmPlayerPhoneUseCase } from '../modules/identity/application/use-cases/confirm-player-phone-use-case.ts'
 import { CancelPlayerPhoneUseCase } from '../modules/identity/application/use-cases/cancel-player-phone-use-case.ts'
+import { BeginGoogleSignInUseCase } from '../modules/identity/application/use-cases/begin-google-sign-in-use-case.ts'
+import { CompleteGoogleSignInUseCase } from '../modules/identity/application/use-cases/complete-google-sign-in-use-case.ts'
+import { googleSignInFeedback } from '../presentation/google-sign-in-feedback.ts'
 
 @inject()
 export default class IdentityController {
@@ -28,13 +31,56 @@ export default class IdentityController {
     private readPlayerProfile: ReadPlayerProfileUseCase,
     private updatePlayerProfile: UpdatePlayerProfileUseCase,
     private confirmPlayerPhone: ConfirmPlayerPhoneUseCase,
-    private cancelPlayerPhone: CancelPlayerPhoneUseCase
+    private cancelPlayerPhone: CancelPlayerPhoneUseCase,
+    private beginGoogle: BeginGoogleSignInUseCase,
+    private completeGoogle: CompleteGoogleSignInUseCase
   ) {}
 
-  async signIn({ inertia, response }: HttpContext) {
+  async signIn({ inertia, response, session }: HttpContext) {
     response.header('cache-control', 'no-store')
 
-    return inertia.render('identity/sign-in', { pending: null })
+    return inertia.render('identity/sign-in', {
+      pending: null,
+      feedback: session.flashMessages.get('googleFeedback') ?? null,
+    })
+  }
+
+  async googleStart({ session, response }: HttpContext) {
+    response.header('cache-control', 'no-store')
+    response.header('referrer-policy', 'no-referrer')
+    const result = await this.beginGoogle.execute({ browserId: session.sessionId })
+
+    if (!result) {
+      session.flash('googleFeedback', googleSignInFeedback.failed)
+
+      return response.redirect('/sign-in', false)
+    }
+
+    session.put('googleAttemptStarted', true)
+
+    return response.redirect(result.url, false)
+  }
+
+  async googleCallback({ request, session, response }: HttpContext) {
+    response.header('cache-control', 'no-store')
+    response.header('referrer-policy', 'no-referrer')
+    const query = request.qs()
+    const result = await this.completeGoogle.execute({
+      state: query.state,
+      code: query.code,
+      providerError: query.error,
+      issuer: query.iss,
+      browserId: session.sessionId,
+      requestId: request.id()!,
+    })
+
+    if ('denied' in result) {
+      session.flash('googleFeedback', googleSignInFeedback[result.denied])
+
+      return response.redirect('/sign-in', false)
+    }
+
+    return response.redirect(result.access === 'player' ? '/me' : '/onboarding', false)
   }
 
   async codePage({ session, inertia, response }: HttpContext) {

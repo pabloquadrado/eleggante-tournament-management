@@ -5,13 +5,15 @@ import { useOtpChallenge, type OtpChallenge } from '../../lib/use-otp-challenge.
 
 export default function SignIn({
   pending,
+  feedback,
 }: {
   pending: (OtpChallenge & { email: string }) | null
+  feedback?: string | null
 }) {
   const [email, setEmail] = useState(pending?.email ?? '')
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState(pending?.message ?? '')
+  const [message, setMessage] = useState(feedback ?? pending?.message ?? '')
   const [deliveryMessage, setDeliveryMessage] = useState('')
   const canResend = useOtpChallenge(pending, setDeliveryMessage)
 
@@ -55,9 +57,10 @@ export default function SignIn({
       </a>
       <h1>Entrar na Arena Eleggante</h1>
       <p>
-        Use seu e-mail para receber um código de acesso. Novos jogadores completam o perfil após a
+        Entre com o Google ou receba um código por e-mail. Novos jogadores completam o perfil após a
         verificação.
       </p>
+      <a href="/auth/google">Entrar com Google</a>
       <p role="status" aria-live="polite">
         {message}
       </p>
