@@ -127,10 +127,7 @@ export class WorkflowController {
       })
     }
 
-    if (
-      run.repair &&
-      (!run.reports.refinement?.passed || !run.reports.plan?.passed)
-    ) {
+    if (run.repair && (!run.reports.refinement?.passed || !run.reports.plan?.passed)) {
       delete run.repair
       run.events.push({
         at: new Date().toISOString(),
@@ -353,8 +350,7 @@ export class WorkflowController {
     const sessions = (run.usageSessions ??= [])
     const index = sessions.findIndex(
       (session) =>
-        session.harness === report.model.harness &&
-        session.sessionId === report.model.sessionId
+        session.harness === report.model.harness && session.sessionId === report.model.sessionId
     )
     const existing = index >= 0 ? sessions[index] : undefined
     const incoming = report.model.usage ?? null
@@ -370,7 +366,12 @@ export class WorkflowController {
     const mergeMetric = (key: keyof Omit<ModelUsage, 'scope' | 'evidence'>) => {
       const previous = existing?.usage?.[key]
       const next = incoming?.[key]
-      return previous === undefined ? next : next === undefined ? previous : Math.max(previous, next)
+
+      return previous === undefined
+        ? next
+        : next === undefined
+          ? previous
+          : Math.max(previous, next)
     }
     const usage: ModelUsage | null = incoming
       ? {

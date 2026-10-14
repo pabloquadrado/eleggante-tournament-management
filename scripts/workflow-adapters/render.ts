@@ -23,8 +23,7 @@ const descriptions: Record<Role, string> = {
 }
 
 export function validateSupport(options: AdapterOptions): void {
-  const isOpenAiProfile =
-    options.profile === 'openai' || options.profile === 'openai-economy'
+  const isOpenAiProfile = options.profile === 'openai' || options.profile === 'openai-economy'
 
   if (options.harness === 'codex' && !isOpenAiProfile) {
     throw new Error('Codex requires the openai profile; an Anthropic gateway is not configured.')

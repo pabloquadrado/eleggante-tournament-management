@@ -8,11 +8,13 @@ import type {
   PlayerRecord,
   ProfileUpdateResult,
 } from '../../domain/identity-records.ts'
-import type { GoogleAuthAttempt } from '../../domain/google-auth-attempt.ts'
+import type { GoogleAuthAttempt, GoogleEmailProof } from '../../domain/google-auth-attempt.ts'
 
 export interface GoogleAttemptRepository {
   append(attempt: GoogleAuthAttempt): Promise<void>
   forBrowser(stateKey: string, browserKey: string): Promise<GoogleAuthAttempt | null>
+  forEmailVerification(id: string, browserKey: string): Promise<GoogleAuthAttempt | null>
+  awaitEmailProof(id: string, proof: GoogleEmailProof, now: Date): Promise<void>
   finish(id: string, outcome: 'consumed' | 'invalidated', now: Date): Promise<void>
 }
 

@@ -204,6 +204,7 @@ function usageSummary(sessions: UsageSession[] = []) {
   for (const session of sessions) {
     const key = JSON.stringify([session.role, session.model, session.effort])
     const group = groups.get(key) ?? []
+
     group.push(session)
     groups.set(key, group)
   }
@@ -214,6 +215,7 @@ function usageSummary(sessions: UsageSession[] = []) {
   ) => {
     const values = group.flatMap((session) => {
       const value = session.usage?.[key]
+
       return value === undefined ? [] : [value]
     })
 

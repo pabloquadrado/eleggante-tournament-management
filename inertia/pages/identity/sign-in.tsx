@@ -7,7 +7,7 @@ export default function SignIn({
   pending,
   feedback,
 }: {
-  pending: (OtpChallenge & { email: string }) | null
+  pending: (OtpChallenge & { email: string; google?: boolean }) | null
   feedback?: string | null
 }) {
   const [email, setEmail] = useState(pending?.email ?? '')
@@ -81,6 +81,9 @@ export default function SignIn({
       ) : (
         <>
           <p>Quando receber o código em {email}, informe-o abaixo.</p>
+          {pending.google && (
+            <p>Confirme o código enviado ao seu e-mail para concluir a entrada com o Google.</p>
+          )}
           <p role="status" aria-live="polite">
             {deliveryMessage}
           </p>

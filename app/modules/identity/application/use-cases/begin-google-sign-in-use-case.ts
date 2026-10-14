@@ -22,6 +22,7 @@ export class BeginGoogleSignInUseCase {
         stateKey: this.secrets.key('google-state', prepared.state),
         browserKey: this.secrets.key('google-browser', input.browserId),
         material: { state: prepared.state, verifier: prepared.verifier },
+        emailProof: null,
         createdAt: now,
         expiresAt: new Date(now.getTime() + googleAttemptLifetimeMs),
         consumedAt: null,

@@ -1,6 +1,8 @@
 import { isGoogleState, isPendingGoogleAttempt } from '../../domain/google-auth-attempt.ts'
 import { GoogleIdentityEvidence } from '../../domain/google-identity-evidence.ts'
-import { googleAccountCanOpen } from '../../domain/google-account-policy.ts'
+import { EmailAddress } from '../../domain/email-address.ts'
+import { requestClientAddress } from '../../domain/request-client-address.ts'
+import type { OtpReceipt } from '../../domain/identity-records.ts'
 import type { IdentityAccess } from '../../domain/session-policy.ts'
 import type {
   GoogleAuthorization,
@@ -8,9 +10,13 @@ import type {
   IdentitySession,
 } from '../ports/identity-adapters.ts'
 import type { IdentityQueries, IdentityUnitOfWork } from '../ports/identity-repositories.ts'
-import type { SignInCompletionService } from '../services/sign-in-completion-service.ts'
+import type { GoogleSignInCompletionService } from '../services/google-sign-in-completion-service.ts'
+import type { OtpRequestService } from '../services/otp-request-service.ts'
 
-export type GoogleSignInResult = { access: IdentityAccess } | { denied: 'failed' | 'canceled' }
+export type GoogleSignInResult =
+  | { access: IdentityAccess }
+  | { denied: 'failed' | 'canceled' }
+  | { emailVerificationRequired: true; email: string; receipt: OtpReceipt }
 
 export class CompleteGoogleSignInUseCase {
   constructor(
@@ -19,7 +25,8 @@ export class CompleteGoogleSignInUseCase {
     private secrets: IdentitySecrets,
     private provider: GoogleAuthorization,
     private session: IdentitySession,
-    private completion: SignInCompletionService
+    private completion: GoogleSignInCompletionService,
+    private requests: OtpRequestService
   ) {}
 
   async execute(input: {
@@ -29,6 +36,7 @@ export class CompleteGoogleSignInUseCase {
     issuer: unknown
     browserId: string
     requestId: string
+    clientAddress?: string
   }): Promise<GoogleSignInResult> {
     const failed = { denied: 'failed' } as const
 
@@ -64,7 +72,7 @@ export class CompleteGoogleSignInUseCase {
     const identity = proof ? GoogleIdentityEvidence.parse(proof) : null
 
     const result = await this.work.write<GoogleSignInResult>(async (repositories) => {
-      const { googleAttempts, authIdentities, players, audit } = repositories
+      const { googleAttempts, authIdentities } = repositories
       const locked = await googleAttempts.forBrowser(stateKey, browserKey)
       const now = new Date()
 
@@ -83,50 +91,42 @@ export class CompleteGoogleSignInUseCase {
       }
 
       const association = await authIdentities.findGoogle(identity.subject)
-      const resolved = association
-        ? { player: await players.lock(association.userId), created: false }
-        : await players.resolveEmail(identity.email, this.secrets.id())
 
-      if (!googleAccountCanOpen(resolved.player, identity)) {
-        await googleAttempts.finish(locked.id, 'invalidated', now)
+      if (!association && !identity.emailAuthoritative) {
+        const receipt = await this.requests.request(
+          EmailAddress.parse(identity.email),
+          input.browserId,
+          requestClientAddress(input.clientAddress),
+          locked.id,
+          input.requestId,
+          repositories,
+          {
+            kind: 'google_sign_in',
+            attemptId: locked.id,
+            subject: identity.subject,
+            email: identity.email,
+            expiresAt: locked.expiresAt.toISOString(),
+          }
+        )
 
-        return failed
+        await googleAttempts.awaitEmailProof(
+          locked.id,
+          { subject: identity.subject, email: identity.email },
+          now
+        )
+
+        return { emailVerificationRequired: true, email: identity.email, receipt }
       }
 
-      const authIdentityId = association?.id ?? this.secrets.id()
-
-      if (!association) {
-        await authIdentities.attachGoogle({
-          id: authIdentityId,
-          userId: resolved.player.id,
-          subject: identity.subject,
-          now,
-        })
-
-        if (!resolved.created)
-          await audit.append({
-            actorUserId: resolved.player.id,
-            entityId: resolved.player.id,
-            operation: 'updated',
-            entityVersion: resolved.player.version,
-            requestId: input.requestId,
-            references: { authIdentityId, attemptId: locked.id },
-          })
-      }
-
-      await googleAttempts.finish(locked.id, 'consumed', now)
       const completed = await this.completion.complete(
-        {
-          ...resolved,
-          requestId: input.requestId,
-          references: { authIdentityId, attemptId: locked.id },
-        },
+        { identity, requestId: input.requestId, attemptId: locked.id },
         repositories,
         this.session
       )
 
-      // Eligibility was checked on this same record in this serialized transaction.
-      return completed!
+      await googleAttempts.finish(locked.id, completed ? 'consumed' : 'invalidated', now)
+
+      return completed ?? failed
     })
 
     if ('access' in result) this.session.activate()

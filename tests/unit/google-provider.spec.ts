@@ -135,7 +135,18 @@ test('the wrapper returns only strict trusted userinfo proof and discards all to
     subject: 'fixture-subject',
     email: 'player@example.com',
     emailVerified: true,
+    hostedDomain: undefined,
   })
+
+  for (const hostedDomain of ['Example.COM', 'other.example', '', null, 1]) {
+    proof = { ...validProof, hd: hostedDomain }
+    assert.deepEqual(await provider.exchange({ ...material, code: 'fixture-code' }), {
+      subject: 'fixture-subject',
+      email: 'player@example.com',
+      emailVerified: true,
+      hostedDomain,
+    })
+  }
 
   for (const emailVerified of [false, undefined, 'true', 'false', null]) {
     proof = { ...validProof, email_verified: emailVerified }

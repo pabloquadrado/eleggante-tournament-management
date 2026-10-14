@@ -18,6 +18,7 @@ import { ConsentPolicy } from '../app/modules/identity/domain/consent-policy.ts'
 import { OtpRequestService } from '../app/modules/identity/application/services/otp-request-service.ts'
 import { OtpConsumptionService } from '../app/modules/identity/application/services/otp-consumption-service.ts'
 import { SignInCompletionService } from '../app/modules/identity/application/services/sign-in-completion-service.ts'
+import { GoogleSignInCompletionService } from '../app/modules/identity/application/services/google-sign-in-completion-service.ts'
 import { BeginGoogleSignInUseCase } from '../app/modules/identity/application/use-cases/begin-google-sign-in-use-case.ts'
 import { CompleteGoogleSignInUseCase } from '../app/modules/identity/application/use-cases/complete-google-sign-in-use-case.ts'
 import { ProfileReader } from '../app/modules/identity/application/services/profile-reader.ts'
@@ -106,6 +107,14 @@ export default class ModuleBindingsProvider {
         )
     )
     container.bind(
+      GoogleSignInCompletionService,
+      async (resolver) =>
+        new GoogleSignInCompletionService(
+          await resolver.make(IdentitySecrets),
+          await resolver.make(SignInCompletionService)
+        )
+    )
+    container.bind(
       CompleteGoogleSignInUseCase,
       async (resolver) =>
         new CompleteGoogleSignInUseCase(
@@ -114,7 +123,8 @@ export default class ModuleBindingsProvider {
           await resolver.make(IdentitySecrets),
           await resolver.make(GoogleAuthorization),
           await resolver.make(IdentitySession),
-          await resolver.make(SignInCompletionService)
+          await resolver.make(GoogleSignInCompletionService),
+          await resolver.make(OtpRequestService)
         )
     )
     container.bind(
@@ -161,7 +171,8 @@ export default class ModuleBindingsProvider {
           await resolver.make(IdentitySecrets),
           await resolver.make(IdentitySession),
           await resolver.make(OtpConsumptionService),
-          await resolver.make(SignInCompletionService)
+          await resolver.make(SignInCompletionService),
+          await resolver.make(GoogleSignInCompletionService)
         )
     )
     container.bind(

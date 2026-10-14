@@ -49,6 +49,85 @@ async function authorizeGoogle(page: Page, outcome = 'code=fixture-code') {
 test.group('Google browser sign-in', (group) => {
   group.each.setup(() => testUtils.db().truncate())
 
+  test('third-party Google sign-in requires the bound email code and supports pt-BR recovery and resend before onboarding', async ({
+    visit,
+    assert,
+    cleanup,
+  }) => {
+    const provider = new GoogleProviderFixture()
+
+    provider.proof = {
+      sub: 'private-third-party-subject',
+      email: 'third.party@example.net',
+      email_verified: true,
+    }
+    cleanup(provider.install())
+    const fake = mail.fake()
+
+    cleanup(() => mail.restore())
+    const page = await visit('/sign-in')
+
+    await page.clock.install()
+    await authorizeGoogle(page)
+    await page.getByLabel('Código de acesso').waitFor()
+    await page
+      .getByText('Confirme o código enviado ao seu e-mail para concluir a entrada com o Google.')
+      .waitFor()
+    assert.equal(new URL(page.url()).pathname, '/sign-in/code')
+    assert.equal(new URL(page.url()).search, '')
+    assert.isTrue(await page.getByRole('button', { name: 'Reenviar código' }).isDisabled())
+    assert.lengthOf(await db.from('users'), 0)
+    assert.lengthOf(await db.from('auth_identities'), 0)
+    const pendingAttempt = await db.from('google_auth_attempts').firstOrFail()
+    const privateProfile = await page.request.get('/api/v1/onboarding/profile')
+
+    assert.isNull(pendingAttempt.consumed_at)
+    assert.equal(privateProfile.status(), 401)
+
+    for (const value of [
+      'private-third-party-subject',
+      'fixture-access-token',
+      'google_sign_in',
+      'attemptId',
+    ])
+      assert.notInclude(await page.locator('body').innerText(), value)
+
+    await captureBrowserCoverage(page, 'google-email-proof-pending')
+    await page.getByLabel('Código de acesso').fill('invalid')
+    await page.getByRole('button', { name: 'Verificar código' }).click()
+    await page.getByText('Código inválido ou expirado. Solicite um novo código.').waitFor()
+    await captureBrowserCoverage(page, 'google-email-proof-invalid')
+    await db.from('otp_request_events').update({ created_at: new Date(Date.now() - 61000) })
+    await page.clock.fastForward(61_000)
+    const resent = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === '/api/v1/auth/otp/request'
+    )
+
+    await page.getByRole('button', { name: 'Reenviar código' }).click()
+    const resendResponse = await resent
+
+    assert.equal(resendResponse.status(), 202)
+    await page.getByLabel('Código de acesso').waitFor()
+    await new DispatchOtpOutboxJob().execute()
+    const code = String(fake.messages.sent().at(-1)!.toJSON().message.text).match(/\b\d{6}\b/)![0]
+
+    await page.getByLabel('Código de acesso').fill(code)
+    await page.getByRole('button', { name: 'Verificar código' }).click()
+    await page.getByRole('heading', { name: 'Complete seu perfil' }).waitFor()
+    assert.equal(new URL(page.url()).search, '')
+    assert.equal(await page.getByLabel('Nome de exibição').inputValue(), '')
+    assert.lengthOf(await db.from('users'), 1)
+    assert.lengthOf(await db.from('auth_identities'), 1)
+    const completedAttempt = await db.from('google_auth_attempts').firstOrFail()
+
+    assert.isNotNull(completedAttempt.consumed_at)
+    await captureBrowserCoverage(page, 'google-email-proof-onboarding')
+    await page.getByRole('button', { name: 'Sair' }).click()
+    await page.getByRole('heading', { name: 'Entrar na Arena Eleggante' }).waitFor()
+    await page.goto('/onboarding')
+    await page.getByRole('heading', { name: 'Entrar na Arena Eleggante' }).waitFor()
+  })
+
   test('a player completes Google onboarding and keeps the same profile through both sign-in methods', async ({
     visit,
     assert,

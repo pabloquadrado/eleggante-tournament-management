@@ -21,8 +21,7 @@ export function modelFor(profile: Profile, role: Role, engineerOverride?: 'kimi-
   if (role === 'engineer' && engineerOverride) return { model: 'kimi-k3', effort: 'max' as Effort }
 
   const light = role === 'coordinator' || role === 'delivery-lead'
-  const economy =
-    profile === 'openai-economy' && (role === 'tech-lead' || role === 'qa')
+  const economy = profile === 'openai-economy' && (role === 'tech-lead' || role === 'qa')
   const lowerCost = light || economy
 
   return {

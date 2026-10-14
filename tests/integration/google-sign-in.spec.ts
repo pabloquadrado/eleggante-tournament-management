@@ -132,7 +132,12 @@ test.group('Google player sign-in', (group) => {
     const original = await before.json()
     const provider = new GoogleProviderFixture()
 
-    provider.proof = { sub: 'new-subject', email: 'new@example.com', email_verified: true }
+    provider.proof = {
+      sub: 'new-subject',
+      email: 'new@example.com',
+      email_verified: true,
+      hd: 'example.com',
+    }
     cleanup(provider.install())
     const failurePoints = [
       { table: 'users', event: 'AFTER INSERT' },
@@ -315,7 +320,12 @@ test.group('Google player sign-in', (group) => {
     const profile = await owner.request('/api/v1/onboarding/profile')
     const original = await profile.json()
 
-    provider.proof = { sub: 'another-subject', email: 'player@example.com', email_verified: true }
+    provider.proof = {
+      sub: 'another-subject',
+      email: 'player@example.com',
+      email_verified: true,
+      hd: 'example.com',
+    }
     const fresh = await beginGoogle(foreign)
 
     await foreign.request(googleCallback(fresh.state))
@@ -623,7 +633,12 @@ test.group('Google player sign-in', (group) => {
     const inactiveResponse = await different.request(googleCallback(inactive.state))
 
     assert.equal(inactiveResponse.headers.get('location'), '/sign-in')
-    provider.proof = { sub: 'unlinked-subject', email: 'player@example.com', email_verified: true }
+    provider.proof = {
+      sub: 'unlinked-subject',
+      email: 'player@example.com',
+      email_verified: true,
+      hd: 'example.com',
+    }
     const inactiveEmail = await beginGoogle(different)
 
     const inactiveEmailResponse = await different.request(googleCallback(inactiveEmail.state))

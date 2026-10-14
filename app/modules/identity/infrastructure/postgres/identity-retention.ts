@@ -17,7 +17,7 @@ export class PostgresIdentityRetention extends IdentityRetentionRepository {
       await transaction
         .from('google_auth_attempts')
         .where('expires_at', '<=', now)
-        .update({ material_encrypted: null, updated_at: now })
+        .update({ material_encrypted: null, email_proof_encrypted: null, updated_at: now })
       await transaction
         .from('google_auth_attempts')
         .where('expires_at', '<=', replayCutoff)

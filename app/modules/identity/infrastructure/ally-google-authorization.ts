@@ -65,9 +65,17 @@ export class AllyGoogleAuthorization extends GoogleAuthorization {
         subject: user.original.sub,
         email: user.original.email,
         emailVerified: user.original.email_verified,
+        hostedDomain: user.original.hd,
       })
 
-      return identity ? { ...identity, emailVerified: true } : null
+      return identity
+        ? {
+            subject: identity.subject,
+            email: identity.email,
+            emailVerified: true,
+            hostedDomain: user.original.hd,
+          }
+        : null
     } catch {
       return null
     }

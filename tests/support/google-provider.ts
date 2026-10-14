@@ -15,6 +15,7 @@ export class GoogleProviderFixture {
     sub: 'fixture-subject',
     email: 'PLAYER@example.com',
     email_verified: true,
+    hd: 'example.com',
     name: 'Ignored Google Name',
     picture: 'https://example.com/ignored',
   }

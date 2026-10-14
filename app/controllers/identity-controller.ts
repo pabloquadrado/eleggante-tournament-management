@@ -38,6 +38,9 @@ export default class IdentityController {
 
   async signIn({ inertia, response, session }: HttpContext) {
     response.header('cache-control', 'no-store')
+    // Leaving the bound code page abandons Google linking. An ordinary code
+    // or previous browser session cannot complete that abandoned intent.
+    session.forget('pendingOtp')
 
     return inertia.render('identity/sign-in', {
       pending: null,
@@ -72,12 +75,19 @@ export default class IdentityController {
       issuer: query.iss,
       browserId: session.sessionId,
       requestId: request.id()!,
+      clientAddress: request.request.socket.remoteAddress,
     })
 
     if ('denied' in result) {
       session.flash('googleFeedback', googleSignInFeedback[result.denied])
 
       return response.redirect('/sign-in', false)
+    }
+
+    if ('emailVerificationRequired' in result) {
+      session.put('pendingOtp', { ...result.receipt, email: result.email, google: true })
+
+      return response.redirect('/sign-in/code', false)
     }
 
     return response.redirect(result.access === 'player' ? '/me' : '/onboarding', false)
@@ -119,6 +129,9 @@ export default class IdentityController {
       code: request.input('code'),
       browserId: session.sessionId,
       requestId: request.id()!,
+      googleChallengeId: session.get('pendingOtp')?.google
+        ? session.get('pendingOtp').challengeId
+        : undefined,
     })
 
     return { ...result, next: result.access === 'player' ? '/me' : '/onboarding' }
@@ -217,15 +230,21 @@ export default class IdentityController {
   }
 
   async request({ request, session, response }: HttpContext) {
+    const pending = session.get('pendingOtp')
     const result = await this.requestCode.execute({
       email: request.input('email'),
       browserId: session.sessionId,
       clientAddress: request.request.socket.remoteAddress,
       key: request.header('idempotency-key'),
       requestId: request.id()!,
+      googleChallengeId: pending?.google ? pending.challengeId : undefined,
     })
 
-    session.put('pendingOtp', { ...result.receipt, email: result.email })
+    session.put('pendingOtp', {
+      ...result.receipt,
+      email: result.email,
+      google: pending?.google === true,
+    })
 
     return response.accepted(result.receipt)
   }

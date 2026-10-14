@@ -1,13 +1,18 @@
 import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import encryption from '@adonisjs/core/services/encryption'
 import type { GoogleAttemptRepository } from '../../application/ports/identity-repositories.ts'
-import type { GoogleAuthAttempt, GoogleAttemptMaterial } from '../../domain/google-auth-attempt.ts'
+import type {
+  GoogleAuthAttempt,
+  GoogleAttemptMaterial,
+  GoogleEmailProof,
+} from '../../domain/google-auth-attempt.ts'
 
 export interface GoogleAttemptRow {
   id: string
   state_key: string
   browser_key: string
   material_encrypted: string | null
+  email_proof_encrypted: string | null
   expires_at: Date
   consumed_at: Date | null
   invalidated_at: Date | null
@@ -21,6 +26,9 @@ export function googleAttemptRecord(row: GoogleAttemptRow): GoogleAuthAttempt {
     browserKey: row.browser_key,
     material: row.material_encrypted
       ? encryption.decrypt<GoogleAttemptMaterial>(row.material_encrypted)
+      : null,
+    emailProof: row.email_proof_encrypted
+      ? encryption.decrypt<GoogleEmailProof>(row.email_proof_encrypted)
       : null,
     expiresAt: new Date(row.expires_at),
     consumedAt: row.consumed_at ? new Date(row.consumed_at) : null,
@@ -38,6 +46,7 @@ export class PostgresGoogleAttemptRepository implements GoogleAttemptRepository 
       state_key: attempt.stateKey,
       browser_key: attempt.browserKey,
       material_encrypted: encryption.encrypt(attempt.material),
+      email_proof_encrypted: null,
       expires_at: attempt.expiresAt,
       consumed_at: null,
       invalidated_at: null,
@@ -64,7 +73,30 @@ export class PostgresGoogleAttemptRepository implements GoogleAttemptRepository 
       .update({
         [outcome === 'consumed' ? 'consumed_at' : 'invalidated_at']: now,
         material_encrypted: null,
+        email_proof_encrypted: null,
         updated_at: now,
       })
+  }
+
+  async awaitEmailProof(id: string, proof: GoogleEmailProof, now: Date) {
+    await this.client
+      .from('google_auth_attempts')
+      .where('id', id)
+      .update({
+        material_encrypted: null,
+        email_proof_encrypted: encryption.encrypt(proof),
+        updated_at: now,
+      })
+  }
+
+  async forEmailVerification(id: string, browserKey: string) {
+    const row = await this.client
+      .from('google_auth_attempts')
+      .where('id', id)
+      .where('browser_key', browserKey)
+      .forUpdate()
+      .first()
+
+    return row ? googleAttemptRecord(row) : null
   }
 }

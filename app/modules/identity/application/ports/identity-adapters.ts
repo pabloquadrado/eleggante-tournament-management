@@ -9,6 +9,7 @@ export abstract class GoogleAuthorization {
     subject: unknown
     email: unknown
     emailVerified: unknown
+    hostedDomain?: unknown
   } | null>
 }
 

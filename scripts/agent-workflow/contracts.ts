@@ -338,12 +338,7 @@ export function validateReport(value: unknown): RoleReport {
 
   if (receipt.usage !== undefined && receipt.usage !== null) {
     const usage = receipt.usage
-    const metrics = [
-      'inputTokens',
-      'cachedInputTokens',
-      'outputTokens',
-      'reasoningTokens',
-    ] as const
+    const metrics = ['inputTokens', 'cachedInputTokens', 'outputTokens', 'reasoningTokens'] as const
 
     if (
       !usage ||
