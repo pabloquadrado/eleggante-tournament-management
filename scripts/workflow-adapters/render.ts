@@ -23,7 +23,9 @@ const descriptions: Record<Role, string> = {
 }
 
 export function validateSupport(options: AdapterOptions): void {
-  if (options.harness === 'codex' && options.profile !== 'openai') {
+  const isOpenAiProfile = options.profile === 'openai' || options.profile === 'openai-economy'
+
+  if (options.harness === 'codex' && !isOpenAiProfile) {
     throw new Error('Codex requires the openai profile; an Anthropic gateway is not configured.')
   }
 
@@ -71,7 +73,12 @@ function claude(role: Role, options: AdapterOptions): AdapterFile {
 
 function opencode(role: Role, options: AdapterOptions): AdapterFile {
   const preset = modelFor(options.profile, role, options.engineer)
-  const provider = preset.model === 'kimi-k3' ? 'moonshotai' : options.profile
+  const provider =
+    preset.model === 'kimi-k3'
+      ? 'moonshotai'
+      : options.profile === 'anthropic'
+        ? 'anthropic'
+        : 'openai'
   const permissions = readOnly(role)
     ? [
         { action: '*', resource: '*', effect: 'deny' },

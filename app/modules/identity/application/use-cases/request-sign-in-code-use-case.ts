@@ -9,6 +9,7 @@ export type RequestSignInCodeInput = {
   clientAddress: string | undefined
   key: unknown
   requestId: string
+  googleChallengeId?: unknown
 }
 
 export class RequestSignInCodeUseCase {
@@ -20,14 +21,24 @@ export class RequestSignInCodeUseCase {
   async execute(input: RequestSignInCodeInput) {
     const email = EmailAddress.parse(input.email)
     const receipt = await this.work.write((repositories) =>
-      this.requests.request(
-        email,
-        input.browserId,
-        requestClientAddress(input.clientAddress),
-        input.key,
-        input.requestId,
-        repositories
-      )
+      input.googleChallengeId !== undefined
+        ? this.requests.resendGoogle(
+            input.googleChallengeId,
+            email,
+            input.browserId,
+            requestClientAddress(input.clientAddress),
+            input.key,
+            input.requestId,
+            repositories
+          )
+        : this.requests.request(
+            email,
+            input.browserId,
+            requestClientAddress(input.clientAddress),
+            input.key,
+            input.requestId,
+            repositories
+          )
     )
 
     return { receipt, email: email.value }

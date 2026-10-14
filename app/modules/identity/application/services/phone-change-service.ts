@@ -1,6 +1,6 @@
 import { IdentityError } from '../../domain/identity-error.ts'
 import { isIdentifier } from '../../domain/identifier.ts'
-import { playerProfile } from '../../domain/identity-records.ts'
+import { playerProfile, isGoogleSignInIntent } from '../../domain/identity-records.ts'
 import { isActiveIdentity } from '../../domain/identity-actor.ts'
 import { requireProfileVersion } from '../../domain/profile-version-policy.ts'
 import type { IdentityRepositories } from '../ports/identity-repositories.ts'
@@ -32,7 +32,7 @@ export class PhoneChangeService {
 
         const intent = challenge.intent
 
-        if (!intent || intent.userId !== userId) return null
+        if (!intent || isGoogleSignInIntent(intent) || intent.userId !== userId) return null
 
         const player = await players.lock(userId)
 

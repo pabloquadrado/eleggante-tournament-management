@@ -29,7 +29,7 @@ export async function adaptersCli(args: string[], cwd = process.cwd()): Promise<
     (engineer && engineer !== 'kimi')
   ) {
     throw new Error(
-      'Usage: workflow-adapters.ts <configure|doctor> --harness <codex|claude|opencode> --profile <openai|anthropic> [--engineer kimi] [--dry-run] [--root <directory>]'
+      'Usage: workflow-adapters.ts <configure|doctor> --harness <codex|claude|opencode> --profile <openai|openai-economy|anthropic> [--engineer kimi] [--dry-run] [--root <directory>]'
     )
   }
 

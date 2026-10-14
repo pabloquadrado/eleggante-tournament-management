@@ -8,12 +8,26 @@ import type {
   PlayerRecord,
   ProfileUpdateResult,
 } from '../../domain/identity-records.ts'
+import type { GoogleAuthAttempt, GoogleEmailProof } from '../../domain/google-auth-attempt.ts'
+
+export interface GoogleAttemptRepository {
+  append(attempt: GoogleAuthAttempt): Promise<void>
+  forBrowser(stateKey: string, browserKey: string): Promise<GoogleAuthAttempt | null>
+  forEmailVerification(id: string, browserKey: string): Promise<GoogleAuthAttempt | null>
+  awaitEmailProof(id: string, proof: GoogleEmailProof, now: Date): Promise<void>
+  finish(id: string, outcome: 'consumed' | 'invalidated', now: Date): Promise<void>
+}
 
 export interface PlayerRepository {
   find(id: string): Promise<PlayerRecord>
   lock(id: string): Promise<PlayerRecord>
   resolveEmail(email: string, id: string): Promise<{ player: PlayerRecord; created: boolean }>
   save(id: string, details: PlayerDetails, nextVersion: number, now: Date): Promise<void>
+}
+
+export interface AuthIdentityRepository {
+  findGoogle(subject: string): Promise<{ id: string; userId: string } | null>
+  attachGoogle(input: { id: string; userId: string; subject: string; now: Date }): Promise<void>
 }
 
 export interface OtpChallengeRepository {
@@ -85,6 +99,8 @@ export interface IdentitySessionRepository {
 
 export interface IdentityRepositories {
   players: PlayerRepository
+  authIdentities: AuthIdentityRepository
+  googleAttempts: GoogleAttemptRepository
   challenges: OtpChallengeRepository
   limits: OtpRequestLimitRepository
   commands: ProfileCommandRepository
@@ -103,6 +119,7 @@ export abstract class IdentityUnitOfWork {
 }
 
 export abstract class IdentityQueries {
+  abstract googleAttempt(stateKey: string, browserKey: string): Promise<GoogleAuthAttempt | null>
   abstract player(id: string): Promise<PlayerRecord>
   abstract deliveryStatus(
     challengeId: string,

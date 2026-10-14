@@ -58,6 +58,26 @@ export type ModelReceipt = {
   available: boolean
   sessionId: string
   evidence: string
+  usage?: ModelUsage | null
+}
+export type ModelUsage = {
+  scope: 'session'
+  inputTokens?: number
+  cachedInputTokens?: number
+  outputTokens?: number
+  reasoningTokens?: number
+  evidence: string
+}
+export type UsageSession = {
+  harness: string
+  sessionId: string
+  role: Role
+  model: string
+  effort: Effort
+  stages: Stage[]
+  usage: ModelUsage | null
+  evidence: string
+  recordedAt: string
 }
 export type Finding = {
   id: string
@@ -147,6 +167,7 @@ export type RunState = {
   qaFailureRound?: number
   qaAudit?: { report: string; verification: string }
   reports: Partial<Record<Stage, RoleReport>>
+  usageSessions?: UsageSession[]
   gates: Partial<Record<'engineering' | 'qa', GateEvidence>>
   questions: Question[]
   findings: Finding[]
@@ -314,6 +335,32 @@ export function validateReport(value: unknown): RoleReport {
     )
   )
     throw new Error('Native model session and receipt evidence are required')
+
+  if (receipt.usage !== undefined && receipt.usage !== null) {
+    const usage = receipt.usage
+    const metrics = ['inputTokens', 'cachedInputTokens', 'outputTokens', 'reasoningTokens'] as const
+
+    if (
+      !usage ||
+      usage.scope !== 'session' ||
+      typeof usage.evidence !== 'string' ||
+      !usage.evidence.trim() ||
+      usage.evidence.includes('REPLACE_') ||
+      !metrics.some((key) => usage[key] !== undefined) ||
+      metrics.some(
+        (key) =>
+          usage[key] !== undefined &&
+          (!Number.isSafeInteger(usage[key]) || (usage[key] as number) < 0)
+      ) ||
+      (usage.cachedInputTokens !== undefined &&
+        usage.inputTokens !== undefined &&
+        usage.cachedInputTokens > usage.inputTokens) ||
+      (usage.reasoningTokens !== undefined &&
+        usage.outputTokens !== undefined &&
+        usage.reasoningTokens > usage.outputTokens)
+    )
+      throw new Error('Invalid measured session usage')
+  }
 
   if (
     report.passed &&

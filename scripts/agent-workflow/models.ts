@@ -1,4 +1,4 @@
-export const profiles = ['openai', 'anthropic'] as const
+export const profiles = ['openai', 'openai-economy', 'anthropic'] as const
 export const roles = [
   'coordinator',
   'tech-lead',
@@ -21,16 +21,18 @@ export function modelFor(profile: Profile, role: Role, engineerOverride?: 'kimi-
   if (role === 'engineer' && engineerOverride) return { model: 'kimi-k3', effort: 'max' as Effort }
 
   const light = role === 'coordinator' || role === 'delivery-lead'
+  const economy = profile === 'openai-economy' && (role === 'tech-lead' || role === 'qa')
+  const lowerCost = light || economy
 
   return {
     model:
-      profile === 'openai'
+      profile === 'anthropic'
         ? light
-          ? 'gpt-6-luna'
-          : 'gpt-6.1-sol'
-        : light
           ? 'claude-haiku-5-5'
-          : 'claude-opus-5-5',
-    effort: (light ? 'max' : 'xhigh') as Effort,
+          : 'claude-opus-5-5'
+        : lowerCost
+          ? 'gpt-6-luna'
+          : 'gpt-6.1-sol',
+    effort: (lowerCost ? 'max' : 'xhigh') as Effort,
   }
 }

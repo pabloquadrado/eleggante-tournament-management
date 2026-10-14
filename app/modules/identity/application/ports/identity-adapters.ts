@@ -1,6 +1,17 @@
 import type { OtpPayload } from '../../domain/identity-records.ts'
 import type { IdentityAccess } from '../../domain/session-policy.ts'
 import type { IdentitySessionRepository } from './identity-repositories.ts'
+import type { GoogleAttemptMaterial } from '../../domain/google-auth-attempt.ts'
+
+export abstract class GoogleAuthorization {
+  abstract prepare(): Promise<(GoogleAttemptMaterial & { url: string }) | null>
+  abstract exchange(input: GoogleAttemptMaterial & { code: string }): Promise<{
+    subject: unknown
+    email: unknown
+    emailVerified: unknown
+    hostedDomain?: unknown
+  } | null>
+}
 
 export abstract class IdentitySecrets {
   abstract id(): string

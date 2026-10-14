@@ -13,6 +13,8 @@ const PublicTournamentsController = () => import('#controllers/public-tournament
 const IdentityController = () => import('#controllers/identity-controller')
 
 router.get('/sign-in', [IdentityController, 'signIn'])
+router.get('/auth/google', [IdentityController, 'googleStart'])
+router.get('/auth/google/callback', [IdentityController, 'googleCallback'])
 router.get('/sign-in/code', [IdentityController, 'codePage'])
 router.get('/onboarding', [IdentityController, 'profilePage']).as('onboarding.page')
 router.get('/me', [IdentityController, 'profilePage']).as('profile.page')

@@ -14,8 +14,25 @@ export interface PlayerRecord {
 }
 
 export interface PhoneChangeIntent extends PlayerDetails {
+  kind?: 'phone_change'
   userId: string
   version: number
+}
+
+export interface GoogleSignInIntent {
+  kind: 'google_sign_in'
+  attemptId: string
+  subject: string
+  email: string
+  expiresAt: string
+}
+
+export type OtpIntent = PhoneChangeIntent | GoogleSignInIntent
+
+export function isGoogleSignInIntent(
+  intent: OtpIntent | null | undefined
+): intent is GoogleSignInIntent {
+  return intent?.kind === 'google_sign_in'
 }
 
 export type OtpPurpose = 'sign_in' | 'phone_change'
@@ -26,7 +43,7 @@ export interface OtpChallenge {
   purpose: OtpPurpose
   userId: string | null
   intentKey: string
-  intent: PhoneChangeIntent | null
+  intent: OtpIntent | null
   emailKey: string
   email: string | null
   browserKey: string

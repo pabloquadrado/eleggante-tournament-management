@@ -16,19 +16,21 @@ flowchart TD
   root --> tooling[scripts/: developer tools]
   root --> harnesses[.agents/, .claude/, .codex/, .opencode/: shared skill and native registrations]
   app --> edges[controllers/, jobs/, middleware/, exceptions/]
+  app --> presentation[presentation/: safe Google sign-in feedback]
   app --> models[models/: framework auth model]
   app --> modules[modules/]
   modules --> identity[identity/]
   modules --> tournaments[tournaments/]
-  identity --> idDomain[domain/: email, profile, actor authorization, consent, OTP and delivery policies]
+  identity --> idDomain[domain/: email, verified Google evidence and attempts, profile, actor authorization, consent, OTP and delivery policies]
   identity --> idApp[application/]
   idApp --> idUseCases[use-cases/: one class and execute input per application operation]
-  idApp --> idServices[services/: OTP creation and consumption, profile reads and updates, phone changes]
+  idApp --> idServices[services/: Google and shared sign-in completion, bound OTP creation and consumption, profile reads and updates, phone changes]
   idApp --> idPorts[ports/: repository and external adapter contracts]
   idApp --> idInputs[identity-input.ts: plain profile and phone-operation inputs]
   identity --> idInfra[infrastructure/]
-  idInfra --> postgres[postgres/: focused repositories, queries, unit of work, retention]
+  idInfra --> postgres[postgres/: focused repositories including Google associations and attempts, queries, unit of work, retention]
   idInfra --> adonis[adonis/: session, secrets, SMTP and queue adapters]
+  idInfra --> google[Ally Google adapter, attempt-bound S256 driver and bounded HTTP transport]
   idInfra --> crypto[otp-cryptography.ts: keyed hashing and code generation]
   tournaments --> tournamentDomain[domain/: public visibility and projection]
   tournaments --> tournamentApp[application/]
@@ -59,7 +61,11 @@ flowchart LR
   http --> identity[Identity use cases]
   http --> catalog[List and find public tournament use cases]
   jobs --> emails[Dispatch and deliver OTP email use cases]
-  identity --> shared[Shared OTP, profile and phone application services]
+  identity --> shared[Shared sign-in completion, OTP, profile and phone application services]
+  identity --> googleCompletion[GoogleSignInCompletionService: final subject and email association]
+  googleCompletion --> shared
+  googleCompletion --> repositories
+  googleCompletion --> domain
   identity --> domain[Domain rules and plain records]
   shared --> domain
   catalog --> domain
@@ -68,11 +74,13 @@ flowchart LR
   shared --> repositories
   catalog --> repositories
   emails --> repositories
-  identity --> adapters[Session, secrets, consent, mail and queue interfaces]
+  identity --> adapters[Session, secrets, consent, Google authorization, mail and queue interfaces]
   shared --> adapters
   emails --> adapters
   pg[PostgreSQL implementations] -. implement .-> repositories
   framework[Adonis session / crypto / mail / queue adapters] -. implement .-> adapters
+  ally[Request-scoped Ally Google adapter] -. implements .-> adapters
+  ally --> google[Google authorization code and trusted online userinfo]
   pg --> db[(PostgreSQL)]
   framework --> smtp[SMTP: Mailpit locally]
   framework --> queue[Adonis queue]
@@ -83,6 +91,7 @@ flowchart LR
   composition -. wires .-> emails
   composition -. binds contracts .-> pg
   composition -. binds contracts .-> framework
+  composition -. binds contract .-> ally
 ```
 
 ## Dependency direction
@@ -95,7 +104,15 @@ Use cases and shared application services import domain rules and contracts. Inf
 
 `app/models/user.ts` is the Adonis authentication adapter model, not a domain object. Framework authentication and session middleware integrate with their configured stores at the edge. Business persistence stays in the module infrastructure. Database migrations and seeders own schema and development fixtures.
 
-The outer use case owns the unit of work. Shared OTP creation, consumption, profile-update, and phone-change services participate through its transaction-bound repositories. Profile changes, OTP state, sessions, outbox intent, replay results, and audit events retain their atomic writes. Invalid OTP attempts are committed before the use case returns a denial. Email delivery uses a separate transaction and locks challenge before outbox; it does not hold the global identity write lock while waiting for SMTP. Verification activates the browser session only after the identity transaction commits.
+The outer use case owns the unit of work. Shared sign-in completion, OTP creation, consumption, profile-update, and phone-change services participate through its transaction-bound repositories. The completion service receives the outer use case's session adapter so persistence and activation refer to the same pending browser session. Profile changes, OTP state, sessions, outbox intent, replay results, and audit events retain their atomic writes. Invalid OTP attempts are committed before the use case returns a denial. Email delivery uses a separate transaction and locks challenge before outbox; it does not hold the global identity write lock while waiting for SMTP. Verification activates the browser session only after the identity transaction commits.
+
+Google callbacks validate the persisted state, initiating browser, pending attempt, and expiry before provider I/O. Ally supplies the code exchange and online userinfo through a bounded transport; the application accepts only a valid subject and strictly verified email, retaining trusted `hd` evidence. A first association is direct only for exact Gmail or a valid hosted domain matching the normalized email domain. A returning subject resolves its established association and enforces the same active-account and email policy.
+
+An unlinked non-authoritative identity enters email-proof pending: `OtpRequestService` saves the exact-email challenge, encrypted subject/email/attempt/deadline intent, outbox, and the attempt's encrypted immutable subject/email binding in one transaction. Browser keys bind both records. OAuth state/PKCE material is cleared, so callback replay is denied while the attempt remains unconsumed; no player resolution, association audit, or session rotation occurs. Resends retain that intent and deadline, with the existing cooldown, limits, and challenge-before-outbox lock order. Expiry retention clears both attempt payloads.
+
+`VerifySignInCodeUseCase` checks fresh code, server-held challenge context, intent integrity, initiating browser, and the locked pending attempt's original subject/email/deadline. `GoogleSignInCompletionService` resolves or creates the eligible player, attaches the subject, and delegates profile/consent access and session persistence to `SignInCompletionService`. Association/audit writes, OTP and Google-attempt consumption, and session rotation share the outer identity transaction and advisory lock. Only committed success activates the browser session; failures leave both proofs unused and preserve prior browser access. Neither provider profile data nor tokens enter account persistence.
+
+The PostgreSQL unit of work also awaits Knex's transaction completion promise after Lucid's managed transaction returns. This ensures deferred commit failures reach the caller before session activation or other effects that depend on committed persistence.
 
 ## Developer workflow
 

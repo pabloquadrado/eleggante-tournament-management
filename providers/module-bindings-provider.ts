@@ -1,5 +1,7 @@
 import type { ApplicationService } from '@adonisjs/core/types'
 import { HttpContext } from '@adonisjs/core/http'
+import env from '#start/env'
+import { AllyGoogleAuthorization } from '../app/modules/identity/infrastructure/ally-google-authorization.ts'
 import {
   IdentityQueries,
   IdentityRetentionRepository,
@@ -10,10 +12,15 @@ import {
   IdentitySession,
   OtpDeliveryQueue,
   OtpMailTransport,
+  GoogleAuthorization,
 } from '../app/modules/identity/application/ports/identity-adapters.ts'
 import { ConsentPolicy } from '../app/modules/identity/domain/consent-policy.ts'
 import { OtpRequestService } from '../app/modules/identity/application/services/otp-request-service.ts'
 import { OtpConsumptionService } from '../app/modules/identity/application/services/otp-consumption-service.ts'
+import { SignInCompletionService } from '../app/modules/identity/application/services/sign-in-completion-service.ts'
+import { GoogleSignInCompletionService } from '../app/modules/identity/application/services/google-sign-in-completion-service.ts'
+import { BeginGoogleSignInUseCase } from '../app/modules/identity/application/use-cases/begin-google-sign-in-use-case.ts'
+import { CompleteGoogleSignInUseCase } from '../app/modules/identity/application/use-cases/complete-google-sign-in-use-case.ts'
 import { ProfileReader } from '../app/modules/identity/application/services/profile-reader.ts'
 import { ProfileUpdateService } from '../app/modules/identity/application/services/profile-update-service.ts'
 import { PhoneChangeService } from '../app/modules/identity/application/services/phone-change-service.ts'
@@ -50,6 +57,22 @@ export default class ModuleBindingsProvider {
   register() {
     const container = this.app.container
 
+    container.bind(GoogleAuthorization, async (resolver) => {
+      const clientId = env.get('GOOGLE_CLIENT_ID')
+      const clientSecret = env.get('GOOGLE_CLIENT_SECRET')?.release()
+
+      return new AllyGoogleAuthorization(
+        await resolver.make(HttpContext),
+        clientId && clientSecret
+          ? {
+              clientId,
+              clientSecret,
+              callbackUrl: new URL('/auth/google/callback', env.get('APP_URL')).href,
+            }
+          : null
+      )
+    })
+
     container.singleton(IdentityUnitOfWork, () => new PostgresIdentityUnitOfWork())
     container.singleton(IdentityQueries, () => new PostgresIdentityQueries())
     container.singleton(IdentityRetentionRepository, () => new PostgresIdentityRetention())
@@ -69,6 +92,40 @@ export default class ModuleBindingsProvider {
     container.bind(
       OtpConsumptionService,
       async (resolver) => new OtpConsumptionService(await resolver.make(IdentitySecrets))
+    )
+    container.bind(
+      SignInCompletionService,
+      async (resolver) => new SignInCompletionService(await resolver.make(ConsentPolicy))
+    )
+    container.bind(
+      BeginGoogleSignInUseCase,
+      async (resolver) =>
+        new BeginGoogleSignInUseCase(
+          await resolver.make(IdentityUnitOfWork),
+          await resolver.make(IdentitySecrets),
+          await resolver.make(GoogleAuthorization)
+        )
+    )
+    container.bind(
+      GoogleSignInCompletionService,
+      async (resolver) =>
+        new GoogleSignInCompletionService(
+          await resolver.make(IdentitySecrets),
+          await resolver.make(SignInCompletionService)
+        )
+    )
+    container.bind(
+      CompleteGoogleSignInUseCase,
+      async (resolver) =>
+        new CompleteGoogleSignInUseCase(
+          await resolver.make(IdentityUnitOfWork),
+          await resolver.make(IdentityQueries),
+          await resolver.make(IdentitySecrets),
+          await resolver.make(GoogleAuthorization),
+          await resolver.make(IdentitySession),
+          await resolver.make(GoogleSignInCompletionService),
+          await resolver.make(OtpRequestService)
+        )
     )
     container.bind(
       ProfileReader,
@@ -112,9 +169,10 @@ export default class ModuleBindingsProvider {
         new VerifySignInCodeUseCase(
           await resolver.make(IdentityUnitOfWork),
           await resolver.make(IdentitySecrets),
-          await resolver.make(ConsentPolicy),
           await resolver.make(IdentitySession),
-          await resolver.make(OtpConsumptionService)
+          await resolver.make(OtpConsumptionService),
+          await resolver.make(SignInCompletionService),
+          await resolver.make(GoogleSignInCompletionService)
         )
     )
     container.bind(

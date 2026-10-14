@@ -1,7 +1,7 @@
 import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import encryption from '@adonisjs/core/services/encryption'
 import type { OtpChallengeRepository } from '../../application/ports/identity-repositories.ts'
-import type { OtpChallenge, OtpPurpose, PhoneChangeIntent } from '../../domain/identity-records.ts'
+import type { OtpChallenge, OtpPurpose, OtpIntent } from '../../domain/identity-records.ts'
 
 interface ChallengeRow {
   id: string
@@ -28,9 +28,7 @@ function challengeRecord(row: ChallengeRow): OtpChallenge {
     purpose: row.purpose,
     userId: row.user_id,
     intentKey: row.intent_key,
-    intent: row.intent_encrypted
-      ? encryption.decrypt<PhoneChangeIntent>(row.intent_encrypted)
-      : null,
+    intent: row.intent_encrypted ? encryption.decrypt<OtpIntent>(row.intent_encrypted) : null,
     emailKey: row.email_key,
     email: row.email_encrypted ? encryption.decrypt<string>(row.email_encrypted) : null,
     browserKey: row.browser_key,

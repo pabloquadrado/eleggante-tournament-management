@@ -4,6 +4,10 @@ Domain language for operating and following Barbershop Eleggante EA FC tournamen
 
 ## Identity and access
 
+**Player account**:
+The player's permanent Arena Eleggante identity, profile, and Arena Eleggante ID, shared by email-code and Google sign-in when they prove the same verified email.
+_Avoid_: Google account, email account, separate player per sign-in method
+
 **Organization**:
 The administrative and brand boundary to which tournaments, Owners, and Organizers belong. Platform Admins operate across Organizations; V1 has only Barbershop Eleggante.
 _Avoid_: Customer, tenant
